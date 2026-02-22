@@ -79,7 +79,7 @@ function showMainMenu(chatId) {
                     [{ text: "📊 احصائياتي", callback_data: "stats" }, { text: "الخدمات", callback_data: "recharge_points" }],
                     [{ text: "💳 مشاركة النقاط", callback_data: "share_points" },{ text: "🎁 هدية يومية", callback_data: "daily_gift" }],
                     [{ text: "🔑 استخدام الكود", callback_data: "use_code" },{ text: "❓ شرح البوت", callback_data: "bot_help" }],
-                    [{ text: "📜 الشروط", callback_data: "terms" }]
+                    [{ text: "📜 الشروط", callback_data: "terms" },{ text: "🚀 دعوة أصدقاء", callback_data: "share_bot" }]
                    
                 ],
           },
@@ -233,45 +233,64 @@ ${totalUsers} مستخدم 🔥`,
   }
 
    
-  if (query.data === "share_bot") {
-    let referralLink = `https://t.me/BlueMoonBot_2025Bot?start=${user.id}`;
-    bot.sendMessage(chatId, `📢 **قم بدعوة أصدقائك إلى البوت عبر هذا الرابط:**\n\n${referralLink}\n\n🔹 عند انضمام أي شخص عبر رابطك، ستحصل على **50 نقطة**!`);
-  }
-// إضافة نقاط عند انضمام مستخدم جديد عبر رابط الإحالة
-bot.onText(/\/start (.+)/, (msg, match) => {
-const chatId = msg.chat.id;
-const referrerId = match[1];
+ if (query.data === "share_bot") {
 
-if (users[chatId]) {
-  return showMainMenu(chatId);
-}
+    const referralLink = `https://t.me/BlueMoonBot_2025Bot?start=${chatId}`;
 
-users[chatId] = {
-  id: Math.floor(1000000000 + Math.random() * 9000000000),
-  points: 0,
-  joinedChannels: [],
-  lastGift: null,
-  referrals: []
-};
+    bot.sendMessage(chatId,
+`📢 رابط الدعوة الخاص بك:
 
-if (users[referrerId]) {
-  users[referrerId].points += 50;
-  users[referrerId].referrals.push(chatId);
-  saveUsers();
-  bot.sendMessage(referrerId,
-`🎉 شكراً على المشاركة!
+${referralLink}
 
-تم انضمام عضو جديد عبر رابطك بنجاح ✅
-تمت إضافة 50 نقطة إلى حسابك 💰
+🎁 كل شخص يدخل عبر رابطك تحصل على 50 نقطة 🔥
 
-استمر بالمشاركة واجمع نقاط أكثر 🔥`,
+شارك الرابط وابدأ جمع النقاط!`,
 { parse_mode: "Markdown" }
 );
 }
+bot.onText(/\/start(?: (.+))?/, (msg, match) => {
+    const chatId = msg.chat.id;
+    const referrerCode = match[1]; // الكود اللي يجي بعد start
 
-  saveUsers();
-  showMainMenu(chatId);
+    // إذا المستخدم جديد
+    if (!users[chatId]) {
+        users[chatId] = {
+            id: Math.floor(1000000000 + Math.random() * 9000000000),
+            points: 0,
+            joinedChannels: [],
+            lastGift: null,
+            invitedBy: null,
+            referrals: []
+        };
+
+        // 🔥 تحقق من رابط الدعوة
+        if (
+            referrerCode &&
+            referrerCode != chatId && // ما يدعو نفسه
+            users[referrerCode] && // لازم الداعي موجود
+            !users[chatId].invitedBy // ما تنحسب مرتين
+        ) {
+            users[chatId].invitedBy = referrerCode;
+            users[referrerCode].points += 50;
+            users[referrerCode].referrals.push(chatId);
+
+            bot.sendMessage(referrerCode,
+`🎉 مبروك!
+
+تم انضمام شخص جديد عبر رابطك ✅
+تمت إضافة 50 نقطة إلى حسابك 💰
+
+👤 العضو الجديد: ${chatId}
+🔥 استمر بالمشاركة!`);
+
+        }
+
+        saveUsers();
+    }
+
+    showMainMenu(chatId);
 });
+
 
 
 
