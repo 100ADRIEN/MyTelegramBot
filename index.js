@@ -43,11 +43,8 @@ function saveUsers() {
 
 
 // تسجيل مستخدم جديد عند دخوله البوت لأول مرة
-bot.on("message", (msg) => {
+bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
-
-    // 🛑 إذا الرسالة أمر مثل /start لا تسوي شي هنا
-    if (msg.text && msg.text.startsWith("/")) return;
 
     if (!users[chatId]) {
         users[chatId] = {
