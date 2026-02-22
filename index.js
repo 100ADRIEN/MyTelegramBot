@@ -27,11 +27,13 @@ const channels = [
 let codes = {
     "k100SHYRHRHFHHDD": { points: 40, usedBy: [], maxUses: 1 }, 
     "yryrhrrhhfHhfury6575rhrrhrh": { points: 50000000000000000000, usedBy: [], maxUses: 1 },
-    "Y1": { points: 30, usedBy: [], maxUses: 1 },
+    "Y108": { points: 30, usedBy: [], maxUses: 1 },
     "Shadhfhghg5JDDJ757ow": { points: 10, usedBy: [], maxUses: 2 }
     
 };
-
+bot.on("message", (msg) => {
+    console.log("تم استقبال رسالة:", msg.text);
+});
 
 // حفظ بيانات المستخدمين
 function saveUsers() {
@@ -41,21 +43,20 @@ function saveUsers() {
 
 
 // تسجيل مستخدم جديد عند دخوله البوت لأول مرة
-bot.onText(/\/start/, (msg) => {
+bot.on("message", (msg) => {
     const chatId = msg.chat.id;
-
     if (!users[chatId]) {
-        users[chatId] = {
-            id: Math.floor(1000000000 + Math.random() * 9000000000),
-            points: 0,
-            joinedChannels: [],
-            lastGift: null
-        };
-        saveUsers();
+      users[chatId] = {
+        id: Math.floor(1000000000 + Math.random() * 9000000000),
+        points: 0,
+        joinedChannels: [],
+        lastGift: null
+      };
+      saveUsers();
     }
-
+  
     showMainMenu(chatId);
-});
+  });
 
 
 
