@@ -45,18 +45,22 @@ function saveUsers() {
 // تسجيل مستخدم جديد عند دخوله البوت لأول مرة
 bot.on("message", (msg) => {
     const chatId = msg.chat.id;
+
+    // 🛑 إذا الرسالة أمر مثل /start لا تسوي شي هنا
+    if (msg.text && msg.text.startsWith("/")) return;
+
     if (!users[chatId]) {
-      users[chatId] = {
-        id: Math.floor(1000000000 + Math.random() * 9000000000),
-        points: 0,
-        joinedChannels: [],
-        lastGift: null
-      };
-      saveUsers();
+        users[chatId] = {
+            id: Math.floor(1000000000 + Math.random() * 9000000000),
+            points: 0,
+            joinedChannels: [],
+            lastGift: null
+        };
+        saveUsers();
     }
-  
+
     showMainMenu(chatId);
-  });
+});
 
 
 
