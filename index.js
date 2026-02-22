@@ -699,7 +699,7 @@ ${JSON.stringify(response.data)}`);
 }
 
     delete pendingOrders[chatId];
-
+}),
 // العودة للقائمة الرئيسية
 if (query.data === "main_menu") {
     showMainMenu(chatId);
