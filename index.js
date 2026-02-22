@@ -698,8 +698,9 @@ ${JSON.stringify(response.data)}`);
     bot.sendMessage(chatId, "❌ حدث خطأ أثناء التنفيذ.");
 }
 
-delete pendingOrders[chatId];
+    delete pendingOrders[chatId];
 });
+
 // العودة للقائمة الرئيسية
 if (query.data === "main_menu") {
     showMainMenu(chatId);
