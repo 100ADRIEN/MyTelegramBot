@@ -27,7 +27,7 @@ const channels = [
 let codes = {
     "k100SHYRHRHFHHDD": { points: 40, usedBy: [], maxUses: 1 }, 
     "yryrhrrhhfHhfury6575rhrrhrh": { points: 50000000000000000000, usedBy: [], maxUses: 1 },
-    "Y108": { points: 30, usedBy: [], maxUses: 1 },
+    "Y100B100": { points: 30, usedBy: [], maxUses: 1 },
     "Shadhfhghg5JDDJ757ow": { points: 10, usedBy: [], maxUses: 2 }
     
 };
