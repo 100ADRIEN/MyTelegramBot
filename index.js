@@ -79,7 +79,7 @@ function showMainMenu(chatId) {
                     [{ text: "📊 احصائياتي", callback_data: "stats" }, { text: "الخدمات", callback_data: "recharge_points" }],
                     [{ text: "💳 مشاركة النقاط", callback_data: "share_points" },{ text: "🎁 هدية يومية", callback_data: "daily_gift" }],
                     [{ text: "🔑 استخدام الكود", callback_data: "use_code" },{ text: "❓ شرح البوت", callback_data: "bot_help" }],
-                    [{ text: "📜 الشروط", callback_data: "terms" },{ text: "💳 شحن نقاط", callback_data: "charge_points" }],
+                    [{ text: "📜 الشروط", callback_data: "terms" }]
                    
                 ],
           },
@@ -185,37 +185,7 @@ ${totalUsers} مستخدم 🔥`,
 }
 
 
-  bot.on("callback_query", (query) => {
-    const chatId = query.message.chat.id;
 
-    // مهم حتى ما يعلق الزر
-    bot.answerCallbackQuery(query.id);
-
-    if (query.data === "charge_points") {
-        bot.sendMessage(chatId, "اختر الباقة المناسبة لك:", {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: "1️⃣ رصيد 5$ - 2000 نقطة", callback_data: "pack_1" }],
-                    [{ text: "2️⃣ رصيد 10$ - 4500 نقطة", callback_data: "pack_2" }],
-                    [{ text: "3️⃣ رصيد 15$ - 5500 نقطة", callback_data: "pack_3" }],
-                    [{ text: "4️⃣ رصيد 20$ - 8000 نقطة", callback_data: "pack_4" }],
-                    [{ text: "5️⃣ رصيد 25$ - 10000 نقطة", callback_data: "pack_5" }],
-                    [{ text: "6️⃣ رصيد 30$ - 12000 نقطة", callback_data: "pack_6" }],
-                    [{ text: "7️⃣ رصيد 40$ - 14000 نقطة", callback_data: "pack_7" }],
-                    [{ text: "8️⃣ رصيد 50$ - 16000 نقطة", callback_data: "pack_8" }],
-                    [{ text: "9️⃣ رصيد 75$ - 20000 نقطة", callback_data: "pack_9" }],
-                    [{ text: "🔟 رصيد 100$ - 30000 نقطة", callback_data: "pack_10" }],
-                    [{ text: "📩 للشحن والشراء راسلني الآن", url: "@Gwvew" }],
-                    [{ text: "🔙 رجوع", callback_data: "main_menu" }]
-                ]
-            }
-        });
-    }
-
-    if (query.data === "main_menu") {
-        showMainMenu(chatId);
-    }
-});
     
     if (query.data === "use_code") {
         bot.sendMessage(chatId, "🔑 أدخل الكود للحصول على نقاط:");
