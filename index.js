@@ -31,9 +31,7 @@ let codes = {
     "Shadhfhghg5JDDJ757ow": { points: 10, usedBy: [], maxUses: 2 }
     
 };
-bot.on("message", (msg) => {
-    console.log("تم استقبال رسالة:", msg.text);
-});
+
 
 // حفظ بيانات المستخدمين
 function saveUsers() {
@@ -45,18 +43,22 @@ function saveUsers() {
 // تسجيل مستخدم جديد عند دخوله البوت لأول مرة
 bot.on("message", (msg) => {
     const chatId = msg.chat.id;
+
     if (!users[chatId]) {
-      users[chatId] = {
-        id: Math.floor(1000000000 + Math.random() * 9000000000),
-        points: 0,
-        joinedChannels: [],
-        lastGift: null
-      };
-      saveUsers();
+        users[chatId] = {
+            id: Math.floor(1000000000 + Math.random() * 9000000000),
+            points: 0,
+            joinedChannels: [],
+            lastGift: null
+        };
+        saveUsers();
     }
-  
-    showMainMenu(chatId);
-  });
+
+    // إذا عنده طلب معلق لا تفتح القائمة
+    if (!pendingOrders[chatId]) {
+        showMainMenu(chatId);
+    }
+});
 
 
 
