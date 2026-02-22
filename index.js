@@ -606,7 +606,7 @@ function sanitizeUser(chatId) {
 bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
 
-
+    
     if (!pendingOrders[chatId]) return;
 
     const link = msg.text;
@@ -616,90 +616,82 @@ bot.on("message", async (msg) => {
     }
 
     const { quantity, cost, type } = pendingOrders[chatId];
-const user = users[chatId];
+    const user = users[chatId];
 
-// 🛑 تحقق من وجود المستخدم
-if (!user) {
-    delete pendingOrders[chatId];
-    return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك، حاول مرة أخرى.");
-}
+    if (!user) {
+        delete pendingOrders[chatId];
+        return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك.");
+    }
 
-// 🛑 إذا نقاطه null أو undefined أو مو رقم
-if (user.points === null || user.points === undefined || isNaN(user.points)) {
-    delete pendingOrders[chatId];
-    return bot.sendMessage(chatId, "❌ نقاطك غير صالحة (NULL)، لا يمكن تنفيذ أي خدمة.");
-}
+    if (user.points === null || user.points === undefined || isNaN(user.points)) {
+        delete pendingOrders[chatId];
+        return bot.sendMessage(chatId, "❌ نقاطك غير صالحة.");
+    }
 
-// 🛑 إذا نقاطه صفر
-if (user.points === 0) {
-    delete pendingOrders[chatId];
-    return bot.sendMessage(chatId, "❌ رصيدك صفر، يجب تجميع نقاط أولاً.");
-}
+    if (user.points === 0) {
+        delete pendingOrders[chatId];
+        return bot.sendMessage(chatId, "❌ رصيدك صفر.");
+    }
 
-// 🛑 إذا نقاطه أقل من سعر الخدمة
-if (user.points < cost) {
-    delete pendingOrders[chatId];
-    return bot.sendMessage(chatId,
-`❌ رصيدك غير كافي لتنفيذ هذه الخدمة.
+    if (user.points < cost) {
+        delete pendingOrders[chatId];
+        return bot.sendMessage(chatId,
+`❌ رصيدك غير كافي.
 
-💰 سعر الخدمة: ${cost}
-💎 رصيدك الحالي: ${user.points}`);
-}
+💰 السعر: ${cost}
+💎 رصيدك: ${user.points}`);
+    }
 
-try {
+    try {
 
-    const serviceId =
-        type === "views" ? 5202 :
-        type === "igshares" ? 10901 :
-        type === "fbstory" ? 9191 :
-        type === "freeviews" ? 10869 :
-        type === "iglikes" ? 10641 :
-        10880;
+        const serviceId =
+            type === "views" ? 5202 :
+            type === "igshares" ? 10901 :
+            type === "fbstory" ? 9191 :
+            type === "freeviews" ? 10869 :
+            type === "iglikes" ? 10641 :
+            10880;
 
-    const response = await axios.post(
-        "https://smmlox.com/api/v2",
-        qs.stringify({
-            key: "cbfc807f1983d1ee38283a3c19219a9b",
-            action: "add",
-            service: serviceId,
-            link: link,
-            quantity: quantity
-        }),
-        {
-            headers: {
-                "Content-Type": "application/x-www-form-urlencoded"
+        const response = await axios.post(
+            "https://smmlox.com/api/v2",
+            qs.stringify({
+                key: "cbfc807f1983d1ee38283a3c19219a9b",
+                action: "add",
+                service: serviceId,
+                link: link,
+                quantity: quantity
+            }),
+            {
+                headers: {
+                    "Content-Type": "application/x-www-form-urlencoded"
+                }
             }
-        }
-    );
+        );
 
-    console.log("API Response:", response.data);
+        if (response.data.order) {
 
-    if (response.data.order) {
+            user.points -= cost;
+            saveUsers();
 
-        // ✅ الخصم بعد نجاح الطلب فقط
-        user.points -= cost;
-        saveUsers();
-
-        bot.sendMessage(chatId,
-`✅ تم تنفيذ الطلب بنجاح
+            bot.sendMessage(chatId,
+`✅ تم تنفيذ الطلب
 📦 الكمية: ${quantity}
 🔹 رقم الطلب: ${response.data.order}
 💰 تم خصم: ${cost}
-💎 رصيدك المتبقي: ${user.points}`);
+💎 المتبقي: ${user.points}`);
 
-    } else {
-        bot.sendMessage(chatId,
-`❌ فشل التنفيذ:
-${JSON.stringify(response.data)}`);
+        } else {
+            bot.sendMessage(chatId, "❌ فشل التنفيذ.");
+        }
+
+    } catch (error) {
+        bot.sendMessage(chatId, "❌ حدث خطأ أثناء التنفيذ.");
     }
 
-} catch (error) {
-    console.log(error.response?.data || error.message);
-    bot.sendMessage(chatId, "❌ حدث خطأ أثناء التنفيذ.");
-}
-
     delete pendingOrders[chatId];
-}),
+
+}); // ← هذا الإغلاق الصحيح
+
 // العودة للقائمة الرئيسية
 if (query.data === "main_menu") {
     showMainMenu(chatId);
@@ -707,3 +699,4 @@ if (query.data === "main_menu") {
 });
 
 console.log("🤖 البوت يعمل الآن...");
+;
