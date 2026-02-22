@@ -41,7 +41,7 @@ function saveUsers() {
 
 
 // تسجيل مستخدم جديد عند دخوله البوت لأول مرة
-bot.on("message", (msg) => {
+bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
 
     if (!users[chatId]) {
@@ -54,10 +54,7 @@ bot.on("message", (msg) => {
         saveUsers();
     }
 
-    // إذا عنده طلب معلق لا تفتح القائمة
-    if (!pendingOrders[chatId]) {
-        showMainMenu(chatId);
-    }
+    showMainMenu(chatId);
 });
 
 
