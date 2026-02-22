@@ -27,7 +27,7 @@ const channels = [
 let codes = {
     "k100SHYRHRHFHHDD": { points: 40, usedBy: [], maxUses: 1 }, 
     "yryrhrrhhfHhfury6575rhrrhrh": { points: 50000000000000000000, usedBy: [], maxUses: 1 },
-    "Ajdhrh": { points: 10, usedBy: [], maxUses: 3 },
+    "Y108": { points: 30, usedBy: [], maxUses: 1 },
     "Shadhfhghg5JDDJ757ow": { points: 10, usedBy: [], maxUses: 2 }
     
 };
@@ -606,7 +606,6 @@ function sanitizeUser(chatId) {
 bot.on("message", async (msg) => {
     const chatId = msg.chat.id;
 
-    
     if (!pendingOrders[chatId]) return;
 
     const link = msg.text;
@@ -699,4 +698,3 @@ if (query.data === "main_menu") {
 });
 
 console.log("🤖 البوت يعمل الآن...");
-;
