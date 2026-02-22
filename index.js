@@ -236,16 +236,12 @@ ${totalUsers} مستخدم 🔥`,
  if (query.data === "share_bot") {
 
     const referralLink = `https://t.me/BlueMoonBot_2025Bot?start=${chatId}`;
-
-    bot.sendMessage(chatId,
+bot.sendMessage(chatId,
 `📢 رابط الدعوة الخاص بك:
 
 ${referralLink}
 
-🎁 كل شخص يدخل عبر رابطك تحصل على 50 نقطة 🔥
-
-شارك الرابط وابدأ جمع النقاط!`,
-{ parse_mode: "Markdown" }
+🎁 كل شخص يدخل عبر رابطك تحصل على 50 نقطة 🔥`
 );
 }
 bot.onText(/\/start(?: (.+))?/, (msg, match) => {
@@ -274,14 +270,15 @@ bot.onText(/\/start(?: (.+))?/, (msg, match) => {
             users[referrerCode].points += 50;
             users[referrerCode].referrals.push(chatId);
 
-            bot.sendMessage(referrerCode,
-`🎉 مبروك!
+        bot.sendMessage(referrerCode,
+`🎉 <b>مبروك!</b>
 
-تم انضمام شخص جديد عبر رابطك ✅
-تمت إضافة 50 نقطة إلى حسابك 💰
+تم انضمام عضو جديد عبر رابطك ✅
+تمت إضافة <b>50 نقطة</b> إلى حسابك 💰
 
-👤 العضو الجديد: ${chatId}
-🔥 استمر بالمشاركة!`);
+🔥 استمر بالمشاركة!`,
+{ parse_mode: "HTML" }
+);
 
         }
 
