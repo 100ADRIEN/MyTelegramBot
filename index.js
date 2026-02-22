@@ -614,75 +614,87 @@ bot.on("message", async (msg) => {
     const { quantity, cost, type } = pendingOrders[chatId];
 const user = users[chatId];
 
-// ❌ إذا نقاطه null
-if (user === "NULL_POINTS") {
+// 🛑 تحقق من وجود المستخدم
+if (!user) {
     delete pendingOrders[chatId];
-    return bot.sendMessage(chatId, "❌ نقاطك null، يرجى التواصل مع الإدارة.");
+    return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك، حاول مرة أخرى.");
 }
 
-// 🔴 إذا نقاطه null نهائياً نوقف كلشي
-if (!user || user.points === null) {
+// 🛑 إذا نقاطه null أو undefined أو مو رقم
+if (user.points === null || user.points === undefined || isNaN(user.points)) {
     delete pendingOrders[chatId];
-    return bot.sendMessage(chatId, "❌ نقاطك غير صالحة (null)، لا يمكن تنفيذ أي طلب.");
+    return bot.sendMessage(chatId, "❌ نقاطك غير صالحة (NULL)، لا يمكن تنفيذ أي خدمة.");
 }
 
-// 🔴 إذا رصيده أقل من السعر
+// 🛑 إذا نقاطه صفر
+if (user.points === 0) {
+    delete pendingOrders[chatId];
+    return bot.sendMessage(chatId, "❌ رصيدك صفر، يجب تجميع نقاط أولاً.");
+}
+
+// 🛑 إذا نقاطه أقل من سعر الخدمة
 if (user.points < cost) {
     delete pendingOrders[chatId];
-    return bot.sendMessage(chatId, "❌ ليس لديك رصيد كافي لتنفيذ هذا الطلب.");
+    return bot.sendMessage(chatId,
+`❌ رصيدك غير كافي لتنفيذ هذه الخدمة.
+
+💰 سعر الخدمة: ${cost}
+💎 رصيدك الحالي: ${user.points}`);
 }
 
-    try {
+try {
 
-        const serviceId =
-            type === "views" ? 5202 :
-            type === "igshares" ? 10901 :
-            type === "fbstory" ? 9191 :
-            type === "freeviews" ? 10869 :
-            type === "iglikes" ? 10641 :
-            10880;
+    const serviceId =
+        type === "views" ? 5202 :
+        type === "igshares" ? 10901 :
+        type === "fbstory" ? 9191 :
+        type === "freeviews" ? 10869 :
+        type === "iglikes" ? 10641 :
+        10880;
 
-        const response = await axios.post(
-            "https://smmlox.com/api/v2",
-            qs.stringify({
-                key: "cbfc807f1983d1ee38283a3c19219a9b",
-                action: "add",
-                service: serviceId,
-                link: link,
-                quantity: quantity
-            }),
-            {
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded"
-                }
+    const response = await axios.post(
+        "https://smmlox.com/api/v2",
+        qs.stringify({
+            key: "cbfc807f1983d1ee38283a3c19219a9b",
+            action: "add",
+            service: serviceId,
+            link: link,
+            quantity: quantity
+        }),
+        {
+            headers: {
+                "Content-Type": "application/x-www-form-urlencoded"
             }
-        );
+        }
+    );
 
-        console.log("API Response:", response.data);
+    console.log("API Response:", response.data);
 
-       if (response.data.order) {
+    if (response.data.order) {
 
-    user.points -= cost;   // 🔥 هنا يتم الخصم
-    saveUsers();
+        // ✅ الخصم بعد نجاح الطلب فقط
+        user.points -= cost;
+        saveUsers();
 
-    bot.sendMessage(chatId,
+        bot.sendMessage(chatId,
 `✅ تم تنفيذ الطلب بنجاح
 📦 الكمية: ${quantity}
 🔹 رقم الطلب: ${response.data.order}
 💰 تم خصم: ${cost}
 💎 رصيدك المتبقي: ${user.points}`);
 
-        } else {
-            bot.sendMessage(chatId, `❌ فشل التنفيذ:\n${JSON.stringify(response.data)}`);
-        }
-
-    } catch (error) {
-        console.log(error.response?.data || error.message);
-        bot.sendMessage(chatId, "❌ حدث خطأ أثناء التنفيذ.");
+    } else {
+        bot.sendMessage(chatId,
+`❌ فشل التنفيذ:
+${JSON.stringify(response.data)}`);
     }
 
-    delete pendingOrders[chatId];
-});
+} catch (error) {
+    console.log(error.response?.data || error.message);
+    bot.sendMessage(chatId, "❌ حدث خطأ أثناء التنفيذ.");
+}
+
+delete pendingOrders[chatId];
 
 // العودة للقائمة الرئيسية
 if (query.data === "main_menu") {
