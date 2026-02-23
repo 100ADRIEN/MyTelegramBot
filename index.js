@@ -362,8 +362,9 @@ if (query.data === "recharge_points") {
         parse_mode: "Markdown",
         reply_markup: {
             inline_keyboard: [
-                [{ text: "🎵 خدمات تيك توك", callback_data: "tiktok_services" }],
+                [{ text: "🎵 لايكات تيك توك", callback_data: "tiktok_services" }],
                 [{ text: "👁 مشاهدات تيك توك", callback_data: "tiktok_views" }],
+                [{ text: "👥 متابعين تيك توك", callback_data: "tiktok_followers" }],
                 [{ text: "❤️ اعجابات إنستقرام", callback_data: "instagram_likes" }],
                 [{ text: "🔁 مشاركات إنستقرام", callback_data: "instagram_shares" }],
                 [{ text: "📘 مشاهدات ستوري فيسبوك", callback_data: "fb_story_views" }],
@@ -427,6 +428,44 @@ const fbStoryPrices = {
     50: 200,
     100: 270
 };
+
+  if (query.data === "tiktok_followers") {
+    bot.sendMessage(chatId, "👥 متابعين تيك توك\nاختر الكمية:", {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "5 متابع - 300 عملة", callback_data: "ttf_5" }],
+                [{ text: "10 متابع - 600 عملة", callback_data: "ttf_10" }],
+                [{ text: "20 متابع - 900 عملة", callback_data: "ttf_20" }],
+                [{ text: "50 متابع - 1900 عملة", callback_data: "ttf_50" }],
+                [{ text: "100 متابع - 3000 عملة", callback_data: "ttf_100" }],
+                [{ text: "1000 متابع - 11000 عملة", callback_data: "ttf_1000" }],
+                [{ text: "🔙 رجوع", callback_data: "tiktok_services" }]
+            ]
+        }
+    });
+}
+
+  const tiktokFollowerPrices = {
+    5: 300,
+    10: 600,
+    20: 900,
+    50: 1900,
+    100: 3000,
+    1000: 11000
+};
+
+  if (query.data.startsWith("ttf_")) {
+    const quantity = parseInt(query.data.split("_")[1]);
+    const cost = tiktokFollowerPrices[quantity];
+
+    pendingOrders[chatId] = {
+        quantity,
+        cost,
+        type: "ttfollowers"
+    };
+
+    bot.sendMessage(chatId, `🔗 أرسل رابط حساب تيك توك الآن للحصول على ${quantity} متابع:`);
+}
 
 
 if (query.data === "instagram_likes") {
@@ -639,12 +678,13 @@ bot.on("message", async (msg) => {
     try {
 
         const serviceId =
-            type === "views" ? 5202 :
-            type === "igshares" ? 10901 :
-            type === "fbstory" ? 9191 :
-            type === "freeviews" ? 10869 :
-            type === "iglikes" ? 10641 :
-            10880;
+    type === "views" ? 5202 :
+    type === "igshares" ? 10901 :
+    type === "fbstory" ? 9191 :
+    type === "freeviews" ? 10869 :
+    type === "iglikes" ? 10641 :
+    type === "ttfollowers" ? 10601 :
+    10880;
 
         const response = await axios.post(
             "https://smmlox.com/api/v2",
