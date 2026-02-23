@@ -74,7 +74,7 @@ let pendingOrders = loadJSON(PENDING_FILE, {});
 
 // codes: { CODE: { points, usedBy:[], maxUses, createdBy, createdAt } }
 let codes = loadJSON(CODES_FILE, {
-  k100SHYRHRHFHHDD: { points: 40, usedBy: [], maxUses: 1 },
+  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000000, usedBy: [], maxUses: 1 },
   BOT100: { points: 50, usedBy: [], maxUses: 5 },
   Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
 });
