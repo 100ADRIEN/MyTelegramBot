@@ -1,31 +1,29 @@
 "use strict";
 
 const TelegramBot = require("node-telegram-bot-api");
+const fs = require("fs");
+const path = require("path");
 const axios = require("axios");
 const qs = require("qs");
 const moment = require("moment");
-const Redis = require("ioredis");
 
 // =====================
-// 1) ENV / CONFIG
+// 1) CONFIG
 // =====================
-const BOT_TOKEN = process.env.BOT_TOKEN;
-if (!BOT_TOKEN) throw new Error("❌ BOT_TOKEN is missing in Railway Variables");
 
-const BOT_USERNAME = process.env.BOT_USERNAME; // مثال: AnimeShadomBot (بدون @)
-if (!BOT_USERNAME) throw new Error("❌ BOT_USERNAME is missing in Railway Variables");
-
-const REDIS_URL = process.env.REDIS_URL;
-if (!REDIS_URL) throw new Error("❌ REDIS_URL is missing (add Redis database on Railway)");
+// ✅ حط توكنك هنا داخل ملفك (لا تنشره بالمحادثات)
+const BOT_TOKEN = "7976169299:AAETNdgYqS84r2wr9StV9oWVfxYkivFp7zs"; // مثل ما طلبت
+if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-const redis = new Redis(REDIS_URL);
-redis.on("error", (e) => console.error("Redis error:", e.message));
+const USERS_FILE = path.join(__dirname, "users.json");
+const PENDING_FILE = path.join(__dirname, "pendingOrders.json");
+const CODES_FILE = path.join(__dirname, "codes.json");
 
-// =====================
-// 2) SETTINGS
-// =====================
+// ✅ عدد الأعضاء (ثابت تكتبه انت)
+const MEMBERS_COUNT = 1234; // غيّره للعدد اللي تريده
+
 // قنوات الاشتراك (اختياري)
 const channels = [
   { name: "📢 قناة الأخبار", link: "https://t.me/balul344" },
@@ -38,68 +36,59 @@ const REFERRAL_BONUS = 8;
 // نقاط الاشتراك بالقنوات
 const CHANNEL_JOIN_POINTS = 5;
 
-// API (SMM) - (مو مربوط فعلياً هنا، بس خليته مثل كودك)
+// API (SMM) - مو مربوط فعلياً حالياً
 const API_URL = "https://smmlox.com/api/v2";
+// ⚠️ إذا عندك API_KEY حقيقي لا تنشره. خليه بملفك فقط.
 const API_KEY = "cbfc807f1983d1ee38283a3c19219a9b";
 
 // =====================
-// 3) REDIS KEYS
+// ✅ بوابة إنشاء الأكواد (زر ظاهر)
 // =====================
-const USERS_KEY = "users";
-const PENDING_KEY = "pendingOrders";
-const CODES_KEY = "codes";
+const LOCKED_BTN_TEXT = "🚫 المشرف";
+const LOCKED_PASSWORD = "QWERTYASDFG123##123Q2002#2004####123456789010#2026ًُ"; // غيرها
+const CREATE_CODE_COST = 10000;  // كلفة الإنشاء
+const DEFAULT_MAX_USES = 4;      // إذا تخطي العدد
 
 // =====================
-// 4) DATA IN MEMORY
+// 2) HELPERS: load/save
 // =====================
-let users = {};
-let pendingOrders = {};
-let codes = {
-  "k100SHYRHRHFHHDD": { points: 40, usedBy: [], maxUses: 1 },
-  "BOT100": { points: 50, usedBy: [], maxUses: 5 },
-  "Shadhfhghg5JDDJ757ow": { points: 10, usedBy: [], maxUses: 2 },
-};
-
-// =====================
-// 5) REDIS HELPERS
-// =====================
-async function loadFromRedis(key, fallback) {
+function loadJSON(file, fallback) {
   try {
-    const raw = await redis.get(key);
-    return raw ? JSON.parse(raw) : fallback;
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (e) {
-    console.error(`loadFromRedis(${key}) error:`, e);
-    return fallback;
+    console.error("loadJSON error:", e);
+  }
+  return fallback;
+}
+
+function saveJSON(file, data) {
+  try {
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  } catch (e) {
+    console.error("saveJSON error:", e);
   }
 }
 
-async function saveToRedis(key, data) {
-  try {
-    await redis.set(key, JSON.stringify(data));
-  } catch (e) {
-    console.error(`saveToRedis(${key}) error:`, e);
-  }
+let users = loadJSON(USERS_FILE, {});
+let pendingOrders = loadJSON(PENDING_FILE, {});
+
+// codes: { CODE: { points, usedBy:[], maxUses, createdBy, createdAt } }
+let codes = loadJSON(CODES_FILE, {
+  k100SHYRHRHFHHDD: { points: 40, usedBy: [], maxUses: 1 },
+  BOT100: { points: 50, usedBy: [], maxUses: 5 },
+  Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
+});
+
+function saveCodes() {
+  saveJSON(CODES_FILE, codes);
 }
 
-async function saveAll() {
-  await Promise.all([
-    saveToRedis(USERS_KEY, users),
-    saveToRedis(PENDING_KEY, pendingOrders),
-    saveToRedis(CODES_KEY, codes),
-  ]);
+function normalizeText(s) {
+  return String(s || "").replace(/\s+/g, " ").trim();
 }
-
-// تحميل الداتا عند تشغيل البوت
-(async () => {
-  users = await loadFromRedis(USERS_KEY, {});
-  pendingOrders = await loadFromRedis(PENDING_KEY, {});
-  const storedCodes = await loadFromRedis(CODES_KEY, null);
-  if (storedCodes && typeof storedCodes === "object") codes = storedCodes;
-  console.log("✅ Loaded users/pendingOrders/codes from Redis");
-})();
 
 // =====================
-// 6) USERS + STATE
+// 3) USERS + STATE
 // =====================
 function ensureUser(chatId) {
   if (!users[chatId]) {
@@ -112,38 +101,41 @@ function ensureUser(chatId) {
       referredBy: null,
       state: { page: "HOME", lastMsgId: null, tmp: {} },
     };
-    saveAll();
+    saveJSON(USERS_FILE, users);
     return users[chatId];
   }
 
-  // ترميم الحسابات القديمة
-  if (!users[chatId].uid) {
-    if (users[chatId].id) users[chatId].uid = String(users[chatId].id);
-    else users[chatId].uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
-  }
-  if (typeof users[chatId].points !== "number") users[chatId].points = 0;
-  if (!Array.isArray(users[chatId].joinedChannels)) users[chatId].joinedChannels = [];
-  if (!Array.isArray(users[chatId].referrals)) users[chatId].referrals = [];
-  if (!users[chatId].state) users[chatId].state = { page: "HOME", lastMsgId: null, tmp: {} };
+  const u = users[chatId];
 
-  return users[chatId];
+  if (!u.uid) {
+    if (u.id) u.uid = String(u.id);
+    else u.uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
+  }
+
+  if (typeof u.points !== "number" || !Number.isFinite(u.points)) u.points = 0;
+  if (!u.joinedChannels) u.joinedChannels = [];
+  if (!u.referrals) u.referrals = [];
+  if (!u.state) u.state = { page: "HOME", lastMsgId: null, tmp: {} };
+  if (!u.state.tmp) u.state.tmp = {};
+
+  saveJSON(USERS_FILE, users);
+  return u;
 }
 
 function setLastMessage(chatId, messageId) {
   const u = ensureUser(chatId);
   u.state.lastMsgId = messageId;
-  saveAll();
+  saveJSON(USERS_FILE, users);
 }
 
 function getLastMessage(chatId) {
-  const u = ensureUser(chatId);
-  return u.state.lastMsgId || null;
+  return ensureUser(chatId).state.lastMsgId;
 }
 
 function setPage(chatId, page) {
   const u = ensureUser(chatId);
   u.state.page = page;
-  saveAll();
+  saveJSON(USERS_FILE, users);
 }
 
 function getPage(chatId) {
@@ -152,12 +144,12 @@ function getPage(chatId) {
 }
 
 // =====================
-// 7) UI BUILDERS
+// 4) UI BUILDERS
 // =====================
 function homeText(u) {
-  return `مرحبًا بك في بوت تطبيق انمي شادو 👋
+  return `مرحبًا بك في بوت تطبيق انمي شادو 👋🫂
 
-🫂 نقاطك: ${u.points}
+💰 نقاطك: ${u.points}
 🔢 آيديك: ${u.uid}`;
 }
 
@@ -180,7 +172,10 @@ function homeKeyboard() {
         { text: "🔗 مشاركة البوت", callback_data: "NAV:REF" },
         { text: "🔑 استخدام الكود", callback_data: "NAV:CODE" },
       ],
-      [{ text: "📜 الشروط", callback_data: "NAV:TERMS" }],
+      [
+        { text: "📜 الشروط", callback_data: "NAV:TERMS" },
+        { text: LOCKED_BTN_TEXT, callback_data: "NAV:LOCKED_GATE" },
+      ],
     ],
   };
 }
@@ -204,14 +199,39 @@ function servicesKeyboard() {
   };
 }
 
+function maxUsesKeyboard() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "1", callback_data: "LOCKED_MAX:1" },
+        { text: "2", callback_data: "LOCKED_MAX:2" },
+        { text: "3", callback_data: "LOCKED_MAX:3" },
+        { text: "4", callback_data: "LOCKED_MAX:4" },
+      ],
+      [{ text: "⏭ تخطي", callback_data: "LOCKED_MAX:SKIP" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }],
+    ],
+  };
+}
+
+function createKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: `✅ إنشاء (${CREATE_CODE_COST})`, callback_data: "LOCKED_CREATE:DO" }],
+      [{ text: "⬅️ رجوع إلى الاقسام", callback_data: "NAV:HOME" }],
+    ],
+  };
+}
+
 // =====================
-// 8) EDIT / SEND SAFE
+// 5) EDIT / SEND SAFE
 // =====================
 async function showHome(chatId) {
   const u = ensureUser(chatId);
   setPage(chatId, "HOME");
 
   const lastMsgId = getLastMessage(chatId);
+
   if (lastMsgId) {
     try {
       await bot.editMessageText(homeText(u), {
@@ -246,14 +266,15 @@ async function editOrSend(chatId, text, keyboard) {
 }
 
 // =====================
-// 9) REFERRAL
+// 6) REFERRAL
 // =====================
 function makeReferralLink(u) {
-  return `https://t.me/${BOT_USERNAME}?start=ref_${u.uid}`;
+  const botUsername = "AnimeShadomBot"; // غيره ليوزر بوتك الحقيقي
+  return `https://t.me/${botUsername}?start=ref_${u.uid}`;
 }
 
 // =====================
-// 10) SERVICES PRICES
+// 7) SERVICES PRICES
 // =====================
 const ttLikePrices = { 10: 5, 20: 10, 30: 20, 40: 30, 50: 40, 60: 50, 70: 60, 80: 70, 90: 80, 100: 90, 120: 100 };
 const ttViewPrices = { 500: 50, 1000: 100, 1500: 150, 3000: 200 };
@@ -263,7 +284,7 @@ const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
 const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
 
 // =====================
-// 11) SERVICE MENUS
+// 8) SERVICE MENUS
 // =====================
 async function showServices(chatId) {
   setPage(chatId, "SERVICES");
@@ -275,8 +296,8 @@ function buildQtyKeyboard(prefix, qtyList, backTo = "NAV:SERVICES") {
   for (let i = 0; i < qtyList.length; i += 2) {
     const a = qtyList[i];
     const b = qtyList[i + 1];
-    const row = [{ text: a.label, callback_data: `${prefix}:${a.qty}` }];
-    if (b) row.push({ text: b.label, callback_data: `${prefix}:${b.qty}` });
+    const row = [{ text: `${a.label}`, callback_data: `${prefix}:${a.qty}` }];
+    if (b) row.push({ text: `${b.label}`, callback_data: `${prefix}:${b.qty}` });
     rows.push(row);
   }
   rows.push([{ text: "⬅️ رجوع", callback_data: backTo }]);
@@ -293,66 +314,75 @@ async function showQtyMenu(chatId, title, prefix, priceMap, backTo) {
 }
 
 // =====================
-// 12) BALANCE GUARD
+// 9) BALANCE GUARD
 // =====================
-async function requireBalanceOrWarn(chatId, user, cost) {
+function requireBalanceOrWarn(chatId, user, cost) {
   if (user.points < cost) {
-    await editOrSend(
-      chatId,
-      `❌ رصيدك غير كافي.\n\n💰 السعر: ${cost}\n💎 رصيدك: ${user.points}`,
-      backToHomeKeyboard()
-    );
+    editOrSend(chatId, `❌ رصيدك غير كافي.\n\n💰 السعر: ${cost}\n💎 رصيدك: ${user.points}`, backToHomeKeyboard());
     return false;
   }
   return true;
 }
 
 // =====================
-// 13) PENDING ORDERS
+// 10) ORDER FLOW
 // =====================
-async function setPending(chatId, order) {
+function setPending(chatId, order) {
   pendingOrders[chatId] = order;
-  await saveToRedis(PENDING_KEY, pendingOrders);
+  saveJSON(PENDING_FILE, pendingOrders);
 }
 
-async function clearPending(chatId) {
+function clearPending(chatId) {
   delete pendingOrders[chatId];
-  await saveToRedis(PENDING_KEY, pendingOrders);
-}
-
-async function askForLink(chatId, promptText) {
-  await bot.sendMessage(chatId, promptText);
+  saveJSON(PENDING_FILE, pendingOrders);
 }
 
 // =====================
-// 14) /start
+// 11) SECRET ADMIN (مخفي)
+// =====================
+const ADMIN_CHAT_ID = "5571001437"; // فقط هذا الـ ID يفتح
+const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
+
+function isAdmin(chatId) {
+  return String(chatId) === String(ADMIN_CHAT_ID);
+}
+
+function adminKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "🧾 كتابة كود نقاط", callback_data: "NAV:MAKE_POINTS_CODE" }],
+      [{ text: "⬅️ رجوع للأقسام", callback_data: "NAV:HOME" }],
+    ],
+  };
+}
+
+function genCode(len = 10) {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+// =====================
+// 12) /start
 // =====================
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
   const chatId = msg.chat.id;
   const u = ensureUser(chatId);
 
   const payload = match && match[1] ? match[1].trim() : null;
-
-  // Referral: ref_UID
   if (payload && payload.startsWith("ref_")) {
     const refUid = payload.replace("ref_", "");
-
-    // لا تعطي نفسك + لا تكرر
     if (!u.referredBy && refUid !== u.uid) {
       const refChatId = Object.keys(users).find(cid => users[cid]?.uid === refUid);
-
       if (refChatId) {
         u.referredBy = refUid;
         users[refChatId].points += REFERRAL_BONUS;
         users[refChatId].referrals = users[refChatId].referrals || [];
         users[refChatId].referrals.push(chatId);
 
-        await saveToRedis(USERS_KEY, users);
-
-        await bot.sendMessage(
-          refChatId,
-          `🎉 انضم عضو جديد عبر رابطك!\n✅ تمت إضافة ${REFERRAL_BONUS} نقطة لحسابك 💰`
-        );
+        saveJSON(USERS_FILE, users);
+        bot.sendMessage(refChatId, `🎉 انضم عضو جديد عبر رابطك!\n✅ تمت إضافة ${REFERRAL_BONUS} نقطة لحسابك 💰`);
       }
     }
   }
@@ -361,7 +391,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 });
 
 // =====================
-// 15) CALLBACK ROUTER
+// 13) CALLBACK ROUTER
 // =====================
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
@@ -371,15 +401,16 @@ bot.on("callback_query", async (q) => {
 
   const data = q.data || "";
 
-  // NAV
+  // =====================
+  // NAV:
+  // =====================
   if (data.startsWith("NAV:")) {
     const action = data.split(":")[1];
 
     if (action === "HOME") return showHome(chatId);
 
     if (action === "MEMBERS") {
-      const totalUsers = Object.keys(users).length;
-      return editOrSend(chatId, `👥 عدد المشتركين في البوت:\n\n${totalUsers} مستخدم 🔥`, backToHomeKeyboard());
+      return editOrSend(chatId, `👥 عدد المشتركين في البوت:\n\n${MEMBERS_COUNT} مستخدم 🔥`, backToHomeKeyboard());
     }
 
     if (action === "STATS") {
@@ -405,30 +436,6 @@ bot.on("callback_query", async (q) => {
 
     if (action === "SERVICES") return showServices(chatId);
 
-    if (action === "CODE") {
-      await bot.sendMessage(chatId, "🔑 أدخل الكود للحصول على نقاط:");
-      bot.once("message", async (m) => {
-        const code = (m.text || "").trim();
-        const codeData = codes[code];
-
-        if (!codeData) return bot.sendMessage(chatId, "❌ كود غير صحيح أو انتهت صلاحيته.");
-
-        codeData.usedBy = codeData.usedBy || [];
-        if (codeData.usedBy.includes(chatId)) return bot.sendMessage(chatId, "❌ لقد استخدمت هذا الكود من قبل.");
-
-        u.points += codeData.points;
-        codeData.usedBy.push(chatId);
-
-        if (codeData.usedBy.length >= codeData.maxUses) delete codes[code];
-
-        await saveToRedis(USERS_KEY, users);
-        await saveToRedis(CODES_KEY, codes);
-
-        return bot.sendMessage(chatId, `✅ تم إضافة ${codeData.points} نقطة إلى حسابك.`);
-      });
-      return;
-    }
-
     if (action === "DAILY") {
       const lastGiftTime = u.lastGift ? moment(u.lastGift) : null;
       const now = moment();
@@ -436,40 +443,24 @@ bot.on("callback_query", async (q) => {
       if (!lastGiftTime || now.diff(lastGiftTime, "hours") >= 24) {
         u.points += 10;
         u.lastGift = now.toISOString();
-        await saveToRedis(USERS_KEY, users);
+        saveJSON(USERS_FILE, users);
         return editOrSend(chatId, "🎁 حصلت على 10 نقاط كمكافأة يومية!", backToHomeKeyboard());
       }
       return editOrSend(chatId, "⏳ يمكنك استلام الهدية بعد 24 ساعة.", backToHomeKeyboard());
     }
 
     if (action === "SHARE_POINTS") {
-      await bot.sendMessage(chatId, "🔢 أدخل ID صديقك لمشاركة النقاط:");
-      bot.once("message", (m1) => {
-        const friendUid = (m1.text || "").trim();
-
-        bot.sendMessage(chatId, "💰 أدخل عدد النقاط التي تريد إرسالها:");
-        bot.once("message", async (m2) => {
-          const amount = parseInt((m2.text || "0").trim(), 10);
-
-          if (!Number.isFinite(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ أدخل رقم صحيح.");
-          if (amount > u.points) return bot.sendMessage(chatId, "❌ ليس لديك نقاط كافية.");
-
-          const friendChatId = Object.keys(users).find(cid => users[cid]?.uid === friendUid);
-          if (!friendChatId) return bot.sendMessage(chatId, "❌ لم يتم العثور على هذا المستخدم.");
-
-          u.points -= amount;
-          users[friendChatId].points += amount;
-
-          await saveToRedis(USERS_KEY, users);
-
-          bot.sendMessage(chatId, `✅ تم إرسال ${amount} نقطة إلى ID: ${friendUid}`);
-          bot.sendMessage(friendChatId, `🎉 وصلك ${amount} نقطة من مستخدم آخر!`);
-        });
-      });
-      return;
+      u.state.tmp.share = { step: "WAIT_FRIEND_ID" };
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "🔢 أدخل ID صديقك لمشاركة النقاط:");
     }
 
-    // تجميع نقاط بالقنوات (تحقق شكلي مثل كودك)
+    if (action === "CODE") {
+      u.state.tmp.useCode = { step: "WAIT_CODE" };
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "🔑 اكتب الكود:");
+    }
+
     if (action === "COLLECT") {
       const available = channels.filter(ch => !u.joinedChannels.includes(ch.link));
       if (available.length === 0) return editOrSend(chatId, "✅ لقد اشتركت في جميع القنوات المتاحة.", backToHomeKeyboard());
@@ -479,20 +470,37 @@ bot.on("callback_query", async (q) => {
 
       await editOrSend(chatId, "📢 اشترك بالقنوات التالية للحصول على نقاط:", { inline_keyboard: buttons });
 
-      setTimeout(async () => {
-        u.points += CHANNEL_JOIN_POINTS;
-        u.joinedChannels.push(available[0].link);
-        await saveToRedis(USERS_KEY, users);
+      // تحقق شكلي (مثل كودك)
+      setTimeout(() => {
+        const uu = ensureUser(chatId);
+        uu.points += CHANNEL_JOIN_POINTS;
+        uu.joinedChannels.push(available[0].link);
+        saveJSON(USERS_FILE, users);
         bot.sendMessage(chatId, `✅ حصلت على ${CHANNEL_JOIN_POINTS} نقاط!`);
       }, 5000);
 
       return;
     }
 
-    // خدمات: قوائم الكميات
+    // ✅ بوابة إنشاء الأكواد
+    if (action === "LOCKED_GATE") {
+      u.state.tmp.locked = { step: "WAIT_ID", flow: {} };
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "🚫 بوابة محظورة\n\n🔢 اكتب الايدي مالك:");
+    }
+
+    // لوحة الأدمن (تطلع بعد كتابة SECRET_OPEN) - مثل كودك
+    if (action === "MAKE_POINTS_CODE") {
+      if (!isAdmin(chatId)) return;
+
+      u.state.tmp.admin = { step: "WAIT_POINTS_EACH" };
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "✍️ اكتب عدد النقاط لكل شخص (مثلاً 10):");
+    }
+
+    // خدمات
     if (action === "SVC_TT_LIKES") return showQtyMenu(chatId, "❤️ لايكات تيك توك\nاختر الكمية:", "BUY:TTLIKES", ttLikePrices, "NAV:SERVICES");
     if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
-
     if (action === "SVC_TT_FREEVIEWS") {
       return editOrSend(chatId, "🎁 مشاهدات تيك توك مجانية\n\nكل 100 مشاهدة = 0 عملة", {
         inline_keyboard: [
@@ -501,14 +509,89 @@ bot.on("callback_query", async (q) => {
         ],
       });
     }
-
     if (action === "SVC_TG_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تلجرام\nاختر الكمية:", "BUY:TGFOLLOW", tgFollowerPrices, "NAV:SERVICES");
     if (action === "SVC_IG_LIKES") return showQtyMenu(chatId, "❤️ اعجابات إنستقرام\nاختر الكمية:", "BUY:IGLIKES", igLikePrices, "NAV:SERVICES");
     if (action === "SVC_IG_SHARES") return showQtyMenu(chatId, "🔁 مشاركات إنستقرام\nاختر الكمية:", "BUY:IGSHARES", igSharePrices, "NAV:SERVICES");
     if (action === "SVC_FB_STORY") return showQtyMenu(chatId, "📘 مشاهدات ستوري فيسبوك\nاختر الكمية:", "BUY:FBSTORY", fbStoryPrices, "NAV:SERVICES");
+
+    return;
   }
 
-  // BUY
+  // =====================
+  // LOCKED: اختيار maxUses
+  // =====================
+  if (data.startsWith("LOCKED_MAX:")) {
+    if (!u.state?.tmp?.locked || u.state.tmp.locked.step !== "WAIT_MAX_CHOICE") return;
+
+    const val = data.split(":")[1];
+    let maxUses = DEFAULT_MAX_USES;
+
+    if (val !== "SKIP") {
+      const n = parseInt(val, 10);
+      if (Number.isFinite(n) && n > 0) maxUses = n;
+    }
+
+    u.state.tmp.locked.flow.maxUses = maxUses;
+    u.state.tmp.locked.step = "READY_CREATE";
+    saveJSON(USERS_FILE, users);
+
+    const flow = u.state.tmp.locked.flow;
+    return editOrSend(
+      chatId,
+      `✅ جاهز للإنشاء\n\n🧾 الكود: ${flow.code}\n⭐️ النقاط لكل شخص: ${flow.points}\n👥 عدد المستخدمين: ${flow.maxUses}\n\n💸 كلفة الإنشاء: ${CREATE_CODE_COST} نقطة\nاضغط إنشاء:`,
+      createKeyboard()
+    );
+  }
+
+  // =====================
+  // LOCKED: إنشاء الكود (خصم 10000)
+  // =====================
+  if (data === "LOCKED_CREATE:DO") {
+    const lock = u.state?.tmp?.locked;
+    if (!lock || lock.step !== "READY_CREATE") {
+      return bot.sendMessage(chatId, "❌ أكو نقص بالخطوات. افتح البوابة من جديد.");
+    }
+
+    if (u.points < CREATE_CODE_COST) {
+      return editOrSend(chatId, `❌ رصيدك غير كافي.\n\n💸 الكلفة: ${CREATE_CODE_COST}\n💎 رصيدك: ${u.points}`, backToHomeKeyboard());
+    }
+
+    const flow = lock.flow || {};
+    const code = String(flow.code || "").trim();
+    const points = parseInt(flow.points, 10);
+    const maxUses = parseInt(flow.maxUses, 10);
+
+    if (!code) return bot.sendMessage(chatId, "❌ الكود فارغ.");
+    if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا. اكتب كود غيره.");
+    if (!Number.isFinite(points) || points <= 0) return bot.sendMessage(chatId, "❌ نقاط الكود غير صحيحة.");
+    if (!Number.isFinite(maxUses) || maxUses <= 0) return bot.sendMessage(chatId, "❌ عدد المستخدمين غير صحيح.");
+
+    u.points -= CREATE_CODE_COST;
+
+    codes[code] = {
+      points,
+      usedBy: [],
+      maxUses,
+      createdBy: u.uid,
+      createdAt: new Date().toISOString(),
+    };
+
+    saveJSON(USERS_FILE, users);
+    saveCodes();
+
+    u.state.tmp.locked = null;
+    saveJSON(USERS_FILE, users);
+
+    return editOrSend(
+      chatId,
+      `✅ تم انشاءه بنجاح!\n\n🧾 الكود: ${code}\n⭐️ لكل شخص: ${points} نقطة\n👥 عدد المستخدمين: ${maxUses}\n\n💸 تم خصم: ${CREATE_CODE_COST}\n💎 رصيدك الحالي: ${u.points}`,
+      { inline_keyboard: [[{ text: "⬅️ رجوع إلى الاقسام", callback_data: "NAV:HOME" }]] }
+    );
+  }
+
+  // =====================
+  // BUY: service purchase
+  // =====================
   if (data.startsWith("BUY:")) {
     const parts = data.split(":"); // BUY, TYPE, QTY
     const type = parts[1];
@@ -526,70 +609,276 @@ bot.on("callback_query", async (q) => {
     if (type === "IGSHARES") { cost = igSharePrices[qty] || 0; askText = "🔗 أرسل رابط منشور إنستقرام:"; orderType = "igshares"; }
     if (type === "FBSTORY") { cost = fbStoryPrices[qty] || 0; askText = "🔗 أرسل رابط الستوري:"; orderType = "fbstory"; }
 
-    if (!orderType) {
-      return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
-    }
+    if (!orderType) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
 
-    // شرطك: إذا ما عنده نقاط كافية ما يوصل لمرحلة الرابط
-    if (cost > 0) {
-      const ok = await requireBalanceOrWarn(chatId, u, cost);
-      if (!ok) return;
-    }
+    if (cost > 0 && !requireBalanceOrWarn(chatId, u, cost)) return;
 
-    await setPending(chatId, { orderType, qty, cost, step: "WAIT_LINK" });
+    setPending(chatId, { orderType, qty, cost, step: "WAIT_LINK" });
 
-    await editOrSend(
-      chatId,
-      `✅ تم اختيار: ${qty}\n💰 السعر: ${cost}\n\n📩 الآن ارسل المطلوب بالرسالة التالية.`,
-      { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }]] }
-    );
+    await editOrSend(chatId, `✅ تم اختيار: ${qty}\n💰 السعر: ${cost}\n\n📩 الآن ارسل المطلوب بالرسالة التالية.`, {
+      inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }]],
+    });
 
-    return askForLink(chatId, askText);
+    return bot.sendMessage(chatId, askText);
   }
 });
 
 // =====================
-// 16) MESSAGE HANDLER FOR PENDING ORDERS
+// 14) SINGLE MESSAGE HANDLER
+//    - secret open
+//    - pending orders link
+//    - locked flow steps
+//    - use code flow
+//    - share points flow
+//    - admin make code flow
 // =====================
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
-  const text = (msg.text || "").trim();
-
-  if (text.startsWith("/start")) return;
-
   const u = ensureUser(chatId);
-  const p = pendingOrders[chatId];
+  const text = normalizeText(msg.text);
 
-  if (!p) return;
+  // فتح لوحة الأدمن (مخفي)
+  if (text === SECRET_OPEN) {
+    if (!isAdmin(chatId)) return;
+    return editOrSend(chatId, "✅ تم فتح لوحة الأدمن.", adminKeyboard());
+  }
 
-  if (p.step === "WAIT_LINK") {
-    const link = text;
-
-    if (p.orderType === "tgfollowers" && !/^https:\/\/t\.me\//i.test(link)) {
-      return bot.sendMessage(chatId, "❌ الرابط لازم يبدأ بـ https://t.me/ (أعد الإرسال)");
+  // =====================
+  // LOCKED FLOW (ID -> PASS -> CODE -> POINTS)
+  // =====================
+  if (u.state?.tmp?.locked?.step === "WAIT_ID") {
+    if (text !== u.uid) {
+      u.state.tmp.locked = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ الايدي غير صحيح. ارجع اضغط زر البوابة من جديد.");
     }
 
-    // خصم النقاط الآن
-    if (p.cost > 0) {
-      if (u.points < p.cost) {
-        await clearPending(chatId);
-        return bot.sendMessage(chatId, "❌ رصيدك صار غير كافي. حاول مرة ثانية.");
-      }
-      u.points -= p.cost;
-      await saveToRedis(USERS_KEY, users);
+    u.state.tmp.locked.step = "WAIT_PASS";
+    saveJSON(USERS_FILE, users);
+    return bot.sendMessage(chatId, "✅ تم التحقق من الايدي.\n\n🔐 اكتب كلمة السر:");
+  }
+
+  if (u.state?.tmp?.locked?.step === "WAIT_PASS") {
+    if (text !== LOCKED_PASSWORD) {
+      u.state.tmp.locked = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ كلمة السر غير صحيحة.");
     }
 
-    await clearPending(chatId);
+    u.state.tmp.locked = { step: "WAIT_CODE", flow: {} };
+    saveJSON(USERS_FILE, users);
+    return bot.sendMessage(chatId, "✅ تم فتح البوابة.\n\n✍️ اكتب الكود اللي تريد تنشئه:");
+  }
+
+  if (u.state?.tmp?.locked?.step === "WAIT_CODE") {
+    const code = (text || "").trim();
+    if (!code) return bot.sendMessage(chatId, "❌ اكتب كود صحيح.");
+    if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا. اكتب كود غيره.");
+
+    u.state.tmp.locked.flow = { code };
+    u.state.tmp.locked.step = "WAIT_POINTS";
+    saveJSON(USERS_FILE, users);
+
+    return bot.sendMessage(chatId, "⭐️ اكتب كم نقطة يحصلون من هذا الكود؟ (مثلاً 10):");
+  }
+
+  if (u.state?.tmp?.locked?.step === "WAIT_POINTS") {
+    const points = parseInt((text || "").trim(), 10);
+    if (!Number.isFinite(points) || points <= 0) {
+      return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0. اكتب النقاط مرة ثانية:");
+    }
+
+    u.state.tmp.locked.flow.points = points;
+    u.state.tmp.locked.step = "WAIT_MAX_CHOICE";
+    saveJSON(USERS_FILE, users);
+
+    return editOrSend(chatId, "👥 اختر عدد الناس اللي يستخدمون الكود (1/2/3/4) أو تخطي:", maxUsesKeyboard());
+  }
+
+  // =====================
+  // استخدام الكود (WAIT_CODE -> WAIT_ID)
+  // =====================
+  if (u.state?.tmp?.useCode?.step === "WAIT_CODE") {
+    const code = text;
+    const codeData = codes[code];
+
+    if (!codeData) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ كود غير صحيح أو انتهت صلاحيته.");
+    }
+
+    codeData.usedBy = codeData.usedBy || [];
+
+    if (codeData.usedBy.includes(String(chatId))) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ انت مستخدم هذا الكود من قبل.");
+    }
+
+    if (codeData.usedBy.length >= codeData.maxUses) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته (وصل الحد الأقصى من الاستخدام).");
+    }
+
+    u.state.tmp.useCode = { step: "WAIT_ID", code };
+    saveJSON(USERS_FILE, users);
+    return bot.sendMessage(chatId, "🔢 اكتب ID مالك حتى تستلم النقاط:");
+  }
+
+  if (u.state?.tmp?.useCode?.step === "WAIT_ID") {
+    const code = u.state.tmp.useCode.code;
+    const codeData = codes[code];
+
+    if (!codeData) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ الكود غير موجود أو انتهى.");
+    }
+
+    if (text !== u.uid) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ الـ ID اللي كتبته مو مالك. اكتب ID الصحيح الموجود بحسابك داخل البوت.");
+    }
+
+    codeData.usedBy = codeData.usedBy || [];
+
+    if (codeData.usedBy.includes(String(chatId))) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ انت مستخدم هذا الكود من قبل.");
+    }
+
+    if (codeData.usedBy.length >= codeData.maxUses) {
+      u.state.tmp.useCode = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته (وصل الحد الأقصى).");
+    }
+
+    u.points += codeData.points;
+    codeData.usedBy.push(String(chatId));
+
+    if (codeData.usedBy.length >= codeData.maxUses) {
+      delete codes[code];
+    }
+
+    saveJSON(USERS_FILE, users);
+    saveCodes();
+
+    u.state.tmp.useCode = null;
+    saveJSON(USERS_FILE, users);
+
+    return bot.sendMessage(chatId, `✅ تم إضافة ${codeData.points} نقطة إلى حسابك.\n💎 رصيدك الحالي: ${u.points}`);
+  }
+
+  // =====================
+  // مشاركة النقاط (WAIT_FRIEND_ID -> WAIT_AMOUNT)
+  // =====================
+  if (u.state?.tmp?.share?.step === "WAIT_FRIEND_ID") {
+    const friendUid = text;
+    u.state.tmp.share.friendUid = friendUid;
+    u.state.tmp.share.step = "WAIT_AMOUNT";
+    saveJSON(USERS_FILE, users);
+    return bot.sendMessage(chatId, "💰 أدخل عدد النقاط التي تريد إرسالها:");
+  }
+
+  if (u.state?.tmp?.share?.step === "WAIT_AMOUNT") {
+    const amount = parseInt(text || "0", 10);
+    const friendUid = u.state.tmp.share.friendUid;
+
+    if (!Number.isFinite(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ أدخل رقم صحيح.");
+    if (amount > u.points) return bot.sendMessage(chatId, "❌ ليس لديك نقاط كافية.");
+
+    const friendChatId = Object.keys(users).find(cid => users[cid]?.uid === friendUid);
+    if (!friendChatId) {
+      u.state.tmp.share = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ لم يتم العثور على هذا المستخدم.");
+    }
+
+    u.points -= amount;
+    users[friendChatId].points += amount;
+    saveJSON(USERS_FILE, users);
+
+    u.state.tmp.share = null;
+    saveJSON(USERS_FILE, users);
+
+    bot.sendMessage(chatId, `✅ تم إرسال ${amount} نقطة إلى ID: ${friendUid}`);
+    bot.sendMessage(friendChatId, `🎉 وصلك ${amount} نقطة من مستخدم آخر!`);
+    return;
+  }
+
+  // =====================
+  // لوحة الأدمن القديمة: MAKE_POINTS_CODE
+  // =====================
+  if (u.state?.tmp?.admin?.step === "WAIT_POINTS_EACH") {
+    const pointsEach = parseInt(text, 10);
+    if (!Number.isFinite(pointsEach) || pointsEach <= 0) {
+      u.state.tmp.admin = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
+    }
+
+    u.state.tmp.admin = { step: "WAIT_MAX_USES", pointsEach };
+    saveJSON(USERS_FILE, users);
+    return bot.sendMessage(chatId, "👥 اكتب عدد الأشخاص اللي يقدرون يستخدمون الكود (مثلاً 4):");
+  }
+
+  if (u.state?.tmp?.admin?.step === "WAIT_MAX_USES") {
+    const maxUses = parseInt(text, 10);
+    const pointsEach = u.state.tmp.admin.pointsEach;
+
+    if (!Number.isFinite(maxUses) || maxUses <= 0) {
+      u.state.tmp.admin = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
+    }
+
+    const totalCost = pointsEach * maxUses;
+    if (u.points < totalCost) {
+      u.state.tmp.admin = null;
+      saveJSON(USERS_FILE, users);
+      return bot.sendMessage(
+        chatId,
+        `❌ رصيدك غير كافي لإنشاء هذا الكود.\n\n⭐️ لكل شخص: ${pointsEach}\n👥 العدد: ${maxUses}\n💸 الكلفة: ${totalCost}\n💎 رصيدك: ${u.points}`
+      );
+    }
+
+    u.points -= totalCost;
+    saveJSON(USERS_FILE, users);
+
+    let code = genCode(10);
+    while (codes[code]) code = genCode(10);
+
+    codes[code] = {
+      points: pointsEach,
+      usedBy: [],
+      maxUses: maxUses,
+      createdBy: u.uid,
+      createdAt: new Date().toISOString(),
+    };
+    saveCodes();
+
+    u.state.tmp.admin = null;
+    saveJSON(USERS_FILE, users);
 
     return bot.sendMessage(
       chatId,
-      `✅ تم استلام طلبك بنجاح!\n\n📦 الخدمة: ${p.orderType}\n🔢 الكمية: ${p.qty}\n🔗 الرابط: ${link}\n\n💎 رصيدك الحالي: ${u.points}`
+      `✅ تم إنشاء الكود بنجاح!\n\n🧾 الكود: ${code}\n⭐️ يعطي لكل شخص: ${pointsEach} نقطة\n👥 عدد المستخدمين: ${maxUses}\n💸 تم خصم: ${totalCost}\n💎 رصيدك الحالي: ${u.points}`,
+      { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع للأقسام", callback_data: "NAV:HOME" }]] } }
     );
   }
-});
 
-// =====================
-// 17) LOG / ERRORS
-// =====================
-bot.on("polling_error", (e) => console.error("polling_error:", e.message));
-console.log("✅ Bot is running...");
+  // =====================
+  // الطلبات المعلقة (مثل كودك)
+  // =====================
+  const pending = pendingOrders[chatId];
+  if (pending && pending.step === "WAIT_LINK") {
+    pending.link = text;
+    pending.step = "DONE";
+    setPending(chatId, pending);
+    return bot.sendMessage(chatId, "✅ تم استلام الرابط. سيتم معالجة الطلب لاحقاً.");
+  }
+});
