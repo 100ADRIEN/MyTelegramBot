@@ -459,7 +459,8 @@ const fbStoryPrices = {
     1000: 1000
 };
 
-  if (query.data.startsWith("tgf_")) {
+ if (query.data.startsWith("tgf_")) {
+
     const quantity = parseInt(query.data.split("_")[1]);
     const cost = telegramFollowerPrices[quantity];
     const user = users[chatId];
@@ -468,12 +469,16 @@ const fbStoryPrices = {
         return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك.");
     }
 
+    if (!cost) {
+        return bot.sendMessage(chatId, "❌ كمية غير صالحة.");
+    }
+
     if (user.points < cost) {
         return bot.sendMessage(chatId,
-`❌ للأسف نقاطك غير كافية.
+`❌ رصيدك غير كافي.
 
-💰 سعر الخدمة: ${cost}
-💎 رصيدك الحالي: ${user.points}`);
+💰 السعر: ${cost}
+💎 رصيدك: ${user.points}`);
     }
 
     pendingOrders[chatId] = {
@@ -483,9 +488,9 @@ const fbStoryPrices = {
     };
 
     bot.sendMessage(chatId,
-`🔗 أرسل رابط قناة أو حساب تلجرام الآن للحصول على ${quantity} متابع 👥`);
+`🔗 أرسل رابط القناة الآن
+يجب أن يبدأ بـ https://t.me/`);
 }
-  
 
   if (query.data === "tiktok_followers") {
     bot.sendMessage(chatId, "👥 متابعين تيك توك\nاختر الكمية:", {
