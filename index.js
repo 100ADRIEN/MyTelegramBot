@@ -39,7 +39,7 @@ const CHANNEL_JOIN_POINTS = 5;
 
 // API (SMM) - مو مربوط فعلياً حالياً
 const API_URL = "https://smmlox.com/api/v2";
-const API_KEY = "PUT_YOUR_API_KEY_HERE"; // إذا تستخدمه فعلاً، خليه سري
+const API_KEY = "cbfc807f1983d1ee38283a3c19219a9b"; // إذا تستخدمه فعلاً، خليه سري
 
 // =====================
 // ✅ أهم شي: أرقام الخدمات (Service IDs)
