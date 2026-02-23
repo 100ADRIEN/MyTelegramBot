@@ -384,7 +384,7 @@ const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 مشاهدات ستوري فيس
 const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
 const IG_LIKES_SERVICE_ID = 10641;
 const TIKTOK_FOLLOWERS_SERVICE_ID = 10601; // 👥 متابعين تيك توك
-const TELEGRAM_FOLLOWERS_SERVICE_ID = 10612; // 👥 متابعين تلجرام
+const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلجرام
   
 let pendingOrders = {};
 
@@ -766,7 +766,7 @@ bot.on("message", async (msg) => {
     type === "freeviews" ? 10869 :
     type === "iglikes" ? 10641 :
     type === "ttfollowers" ? 10601 :
-    type === "tgfollowers" ? 10612 :
+    type === "tgfollowers" ? 6261 :
     10880;
 
         const response = await axios.post(
