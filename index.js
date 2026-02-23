@@ -62,7 +62,7 @@ let pendingOrders = loadJSON(PENDING_FILE, {});
 function ensureUser(chatId) {
   if (!users[chatId]) {
     users[chatId] = {
-      uid: String(Math.floor(1000000000 + Math.random() * 9000000000)), // ID للمشاركة
+      uid: String(Math.floor(1000000000 + Math.random() * 9000000000)),
       points: 0,
       joinedChannels: [],
       lastGift: null,
@@ -71,8 +71,22 @@ function ensureUser(chatId) {
       state: { page: "HOME", lastMsgId: null, tmp: {} },
     };
     saveJSON(USERS_FILE, users);
+    return users[chatId];
   }
+
+  // ✅ ترميم الحسابات القديمة
+  if (!users[chatId].uid) {
+    // إذا كان عنده id قديم نخليه هو uid
+    if (users[chatId].id) users[chatId].uid = String(users[chatId].id);
+    else users[chatId].uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
+  }
+
+  if (!users[chatId].points) users[chatId].points = 0;
+  if (!users[chatId].joinedChannels) users[chatId].joinedChannels = [];
+  if (!users[chatId].referrals) users[chatId].referrals = [];
   if (!users[chatId].state) users[chatId].state = { page: "HOME", lastMsgId: null, tmp: {} };
+
+  saveJSON(USERS_FILE, users);
   return users[chatId];
 }
 
