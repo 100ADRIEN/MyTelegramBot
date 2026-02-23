@@ -364,7 +364,6 @@ if (query.data === "recharge_points") {
             inline_keyboard: [
                 [{ text: "🎵 لايكات تيك توك", callback_data: "tiktok_services" }],
                 [{ text: "👁 مشاهدات تيك توك", callback_data: "tiktok_views" }],
-                [{ text: "👥 متابعين تيك توك", callback_data: "tiktok_followers" }],
                 [{ text: "👥 متابعين تلجرام", callback_data: "telegram_followers" }],
                 [{ text: "❤️ اعجابات إنستقرام", callback_data: "instagram_likes" }],
                 [{ text: "🔁 مشاركات إنستقرام", callback_data: "instagram_shares" }],
@@ -383,7 +382,6 @@ const IG_SHARES_SERVICE_ID = 10901; // 🔁 حط رقم خدمة مشاركات 
 const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 مشاهدات ستوري فيسبوك
 const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
 const IG_LIKES_SERVICE_ID = 10641;
-const TIKTOK_FOLLOWERS_SERVICE_ID = 10601; // 👥 متابعين تيك توك
 const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلجرام
   
 let pendingOrders = {};
@@ -491,65 +489,6 @@ const fbStoryPrices = {
 `🔗 أرسل رابط القناة الآن
 يجب أن يبدأ بـ https://t.me/`);
 }
-
-  if (query.data === "tiktok_followers") {
-    bot.sendMessage(chatId, "👥 متابعين تيك توك\nاختر الكمية:", {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: "5 متابع - 300 عملة", callback_data: "ttf_5" }],
-                [{ text: "10 متابع - 600 عملة", callback_data: "ttf_10" }],
-                [{ text: "20 متابع - 900 عملة", callback_data: "ttf_20" }],
-                [{ text: "50 متابع - 1900 عملة", callback_data: "ttf_50" }],
-                [{ text: "100 متابع - 3000 عملة", callback_data: "ttf_100" }],
-                [{ text: "1000 متابع - 11000 عملة", callback_data: "ttf_1000" }],
-                [{ text: "🔙 رجوع", callback_data: "tiktok_services" }]
-            ]
-        }
-    });
-}
-
-  const tiktokFollowerPrices = {
-    5: 300,
-    10: 600,
-    20: 900,
-    50: 1900,
-    100: 3000,
-    1000: 11000
-};
-
- if (query.data.startsWith("ttf_")) {
-    const quantity = parseInt(query.data.split("_")[1]);
-    const cost = tiktokFollowerPrices[quantity];
-    const user = users[chatId];
-
-    if (!user) {
-        return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك.");
-    }
-
-    // ✅ تحقق من الرصيد قبل تسجيل الطلب
-    if (user.points < cost) {
-        return bot.sendMessage(chatId,
-`❌ للأسف نقاطك غير كافية.
-
-💰 سعر الخدمة: ${cost} عملة
-💎 رصيدك الحالي: ${user.points} عملة
-
-يرجى شحن رصيدك أولاً ثم المحاولة مرة أخرى.
-        `);
-    }
-
-    // ✅ إذا الرصيد كافي فقط هنا نخزن الطلب
-    pendingOrders[chatId] = {
-        quantity,
-        cost,
-        type: "ttfollowers"
-    };
-
-    bot.sendMessage(chatId,
-`🔗 أرسل رابط حساب تيك توك الآن للحصول على ${quantity} متابع 👥
-    `);
-}
-
 if (query.data === "instagram_likes") {
     bot.sendMessage(chatId, "❤️ اعجابات منشور إنستقرام\nاختر الكمية:", {
         reply_markup: {
@@ -765,7 +704,6 @@ bot.on("message", async (msg) => {
     type === "fbstory" ? 9191 :
     type === "freeviews" ? 10869 :
     type === "iglikes" ? 10641 :
-    type === "ttfollowers" ? 10601 :
     type === "tgfollowers" ? 6261 :
     10880;
 
