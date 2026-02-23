@@ -382,7 +382,8 @@ const IG_SHARES_SERVICE_ID = 10901; // 🔁 حط رقم خدمة مشاركات 
 const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 مشاهدات ستوري فيسبوك
 const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
 const IG_LIKES_SERVICE_ID = 10641;
-
+const TIKTOK_FOLLOWERS_SERVICE_ID = 10601; // 👥 متابعين تيك توك
+  
 let pendingOrders = {};
 
 // اختيار خدمة تيك توك لايكات
@@ -454,19 +455,38 @@ const fbStoryPrices = {
     1000: 11000
 };
 
-  if (query.data.startsWith("ttf_")) {
+ if (query.data.startsWith("ttf_")) {
     const quantity = parseInt(query.data.split("_")[1]);
     const cost = tiktokFollowerPrices[quantity];
+    const user = users[chatId];
 
+    if (!user) {
+        return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك.");
+    }
+
+    // ✅ تحقق من الرصيد قبل تسجيل الطلب
+    if (user.points < cost) {
+        return bot.sendMessage(chatId,
+`❌ للأسف نقاطك غير كافية.
+
+💰 سعر الخدمة: ${cost} عملة
+💎 رصيدك الحالي: ${user.points} عملة
+
+يرجى شحن رصيدك أولاً ثم المحاولة مرة أخرى`.
+        );
+    }
+
+    // ✅ إذا الرصيد كافي فقط هنا نخزن الطلب
     pendingOrders[chatId] = {
         quantity,
         cost,
         type: "ttfollowers"
     };
 
-    bot.sendMessage(chatId, `🔗 أرسل رابط حساب تيك توك الآن للحصول على ${quantity} متابع:`);
+    bot.sendMessage(chatId,
+`🔗 أرسل رابط حساب تيك توك الآن للحصول على ${quantity} متابع 👥
+    `);
 }
-
 
 if (query.data === "instagram_likes") {
     bot.sendMessage(chatId, "❤️ اعجابات منشور إنستقرام\nاختر الكمية:", {
