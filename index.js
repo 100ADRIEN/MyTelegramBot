@@ -11,7 +11,7 @@ const moment = require("moment");
 // 1) CONFIG
 // =====================
 
-// ✅ حط توكنك هنا داخل ملفك فقط
+// ⚠️ حط توكنك داخل ملفك فقط
 const BOT_TOKEN = "7976169299:AAETNdgYqS84r2wr9StV9oWVfxYkivFp7zs"; // نفس اللي دزيته
 if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
 
@@ -22,8 +22,9 @@ const PENDING_FILE = path.join(__dirname, "pendingOrders.json");
 const CODES_FILE = path.join(__dirname, "codes.json");
 const ORDERS_FILE = path.join(__dirname, "orders.json");
 
-// ✅ عدد الأعضاء ثابت (أنت تكتبه)
-const MEMBERS_COUNT = 1234; // غيّره للعدد اللي تريده
+// ✅ API موقعك أنت (انت تغيّرها)
+const YOUR_BACKEND_API_URL = "https://your-domain.com/api/orders"; // غيّرها
+const YOUR_BACKEND_API_KEY = "PUT_YOUR_BACKEND_KEY_HERE";          // غيّرها
 
 // قنوات الاشتراك (اختياري)
 const channels = [
@@ -37,12 +38,9 @@ const REFERRAL_BONUS = 8;
 // نقاط الاشتراك بالقنوات
 const CHANNEL_JOIN_POINTS = 5;
 
-// API (SMM) - مو مربوط فعلياً حالياً
-const API_URL = "https://smmlox.com/api/v2";
-const API_KEY = "cbfc807f1983d1ee38283a3c19219a9b"; // إذا تستخدمه فعلاً، خليه سري
-
 // =====================
-// ✅ أهم شي: أرقام الخدمات (Service IDs)
+// ✅ أرقام الخدمات (Service IDs) — مثل ما دزّيت
+// ملاحظة: الأرقام هاي تتخزن بالطلب وتتبعت لموقعك أنت
 // =====================
 const SERVICE_IDS = {
   tiktok_likes: 10880,
@@ -54,7 +52,6 @@ const SERVICE_IDS = {
   telegram_followers: 6261,
 };
 
-// ربط orderType الداخلي بالـ serviceKey أعلاه
 const ORDER_TYPE_TO_SERVICE_KEY = {
   ttlikes: "tiktok_likes",
   ttviews: "tiktok_views",
@@ -68,10 +65,14 @@ const ORDER_TYPE_TO_SERVICE_KEY = {
 // =====================
 // ✅ بوابة إنشاء الأكواد (زر ظاهر)
 // =====================
-const LOCKED_BTN_TEXT = "🚫 المشرفين";
+const LOCKED_BTN_TEXT = "🚫 اسم من يمك";
 const LOCKED_PASSWORD = "QWERTYASDFG123##123Q2002#2004####123456789010#2026ًُ"; // غيرها
 const CREATE_CODE_COST = 10000;  // كلفة الإنشاء
 const DEFAULT_MAX_USES = 4;      // إذا تخطي العدد
+
+// الأدمن
+const ADMIN_CHAT_ID = "5571001437";
+const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
 
 // =====================
 // 2) HELPERS: load/save
@@ -100,20 +101,14 @@ function normalizeText(s) {
 let users = loadJSON(USERS_FILE, {});
 let pendingOrders = loadJSON(PENDING_FILE, {});
 let orders = loadJSON(ORDERS_FILE, []);
-
-// codes: { CODE: { points, usedBy:[], maxUses, createdBy, createdAt } }
 let codes = loadJSON(CODES_FILE, {
   k100SHYRHRHFHHDD: { points: 40, usedBy: [], maxUses: 1 },
   BOT100: { points: 50, usedBy: [], maxUses: 5 },
   Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
 });
 
-function saveCodes() {
-  saveJSON(CODES_FILE, codes);
-}
-function saveOrders() {
-  saveJSON(ORDERS_FILE, orders);
-}
+function saveCodes() { saveJSON(CODES_FILE, codes); }
+function saveOrders() { saveJSON(ORDERS_FILE, orders); }
 
 // =====================
 // 3) USERS + STATE
@@ -127,6 +122,9 @@ function ensureUser(chatId) {
       lastGift: null,
       referrals: [],
       referredBy: null,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      lastSeen: new Date().toISOString(),
       state: { page: "HOME", lastMsgId: null, tmp: {} },
     };
     saveJSON(USERS_FILE, users);
@@ -135,16 +133,15 @@ function ensureUser(chatId) {
 
   const u = users[chatId];
 
-  if (!u.uid) {
-    if (u.id) u.uid = String(u.id);
-    else u.uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
-  }
-
+  if (!u.uid) u.uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
   if (typeof u.points !== "number" || !Number.isFinite(u.points)) u.points = 0;
   if (!u.joinedChannels) u.joinedChannels = [];
   if (!u.referrals) u.referrals = [];
   if (!u.state) u.state = { page: "HOME", lastMsgId: null, tmp: {} };
   if (!u.state.tmp) u.state.tmp = {};
+  if (typeof u.isActive !== "boolean") u.isActive = true;
+  if (!u.createdAt) u.createdAt = new Date().toISOString();
+  if (!u.lastSeen) u.lastSeen = new Date().toISOString();
 
   saveJSON(USERS_FILE, users);
   return u;
@@ -167,7 +164,33 @@ function setPage(chatId, page) {
 }
 
 // =====================
-// 4) UI BUILDERS
+// 4) API: إرسال طلب إلى موقعك أنت
+// =====================
+// ✅ هذا هو "الطلب الحقيقي" لكن إلى API خاص بيك.
+// موقعك لازم يرجع JSON مثل: { ok:true, orderId:"12345" } أو { error:"..." }
+async function sendOrderToYourBackend({ serviceId, link, quantity, userUid, cost, orderType }) {
+   const res = await axios.post(
+    "https://smmlox.com/api/v2",
+  const payload = {
+    key: cbfc807f1983d1ee38283a3c19219a9b,
+    service: serviceId,
+    link,
+    quantity,
+    user_uid: userUid,
+    cost,
+    order_type: orderType,
+  });
+
+  const res = await axios.post(YOUR_BACKEND_API_URL, qs.stringify(payload), {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    timeout: 20000,
+  });
+
+  return res.data;
+}
+
+// =====================
+// 5) UI BUILDERS
 // =====================
 function homeText(u) {
   return `مرحبًا بك في بوت تطبيق انمي شادو 👋🫂
@@ -247,7 +270,7 @@ function createLockedKeyboard() {
 }
 
 // =====================
-// 5) EDIT / SEND SAFE
+// 6) EDIT / SEND SAFE
 // =====================
 async function showHome(chatId) {
   const u = ensureUser(chatId);
@@ -289,7 +312,7 @@ async function editOrSend(chatId, text, keyboard) {
 }
 
 // =====================
-// 6) REFERRAL
+// 7) REFERRAL
 // =====================
 function makeReferralLink(u) {
   const botUsername = "AnimeShadomBot"; // غيره ليوزر بوتك الحقيقي
@@ -297,7 +320,7 @@ function makeReferralLink(u) {
 }
 
 // =====================
-// 7) SERVICES PRICES
+// 8) SERVICES PRICES
 // =====================
 const ttLikePrices = { 10: 5, 20: 10, 30: 20, 40: 30, 50: 40, 60: 50, 70: 60, 80: 70, 90: 80, 100: 90, 120: 100 };
 const ttViewPrices = { 500: 50, 1000: 100, 1500: 150, 3000: 200 };
@@ -307,7 +330,7 @@ const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
 const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
 
 // =====================
-// 8) SERVICE MENUS
+// 9) MENUS HELPERS
 // =====================
 async function showServices(chatId) {
   setPage(chatId, "SERVICES");
@@ -337,7 +360,7 @@ async function showQtyMenu(chatId, title, prefix, priceMap, backTo) {
 }
 
 // =====================
-// 9) BALANCE GUARD
+// 10) BALANCE GUARD
 // =====================
 function requireBalanceOrWarn(chatId, user, cost) {
   if (user.points < cost) {
@@ -348,7 +371,7 @@ function requireBalanceOrWarn(chatId, user, cost) {
 }
 
 // =====================
-// 10) ORDER FLOW (pending)
+// 11) Pending orders
 // =====================
 function setPending(chatId, order) {
   pendingOrders[chatId] = order;
@@ -365,11 +388,8 @@ function genOrderId() {
 }
 
 // =====================
-// 11) SECRET ADMIN (مخفي)
+// 12) ADMIN
 // =====================
-const ADMIN_CHAT_ID = "5571001437";
-const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
-
 function isAdmin(chatId) {
   return String(chatId) === String(ADMIN_CHAT_ID);
 }
@@ -391,11 +411,15 @@ function genCode(len = 10) {
 }
 
 // =====================
-// 12) /start
+// 13) /start
 // =====================
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
   const chatId = msg.chat.id;
   const u = ensureUser(chatId);
+
+  u.lastSeen = new Date().toISOString();
+  u.isActive = true;
+  saveJSON(USERS_FILE, users);
 
   const payload = match && match[1] ? match[1].trim() : null;
   if (payload && payload.startsWith("ref_")) {
@@ -418,7 +442,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 });
 
 // =====================
-// 13) CALLBACK ROUTER
+// 14) CALLBACK ROUTER
 // =====================
 bot.on("callback_query", async (q) => {
   const chatId = q.message.chat.id;
@@ -428,16 +452,15 @@ bot.on("callback_query", async (q) => {
 
   const data = q.data || "";
 
-  // ---------------------
-  // NAV
-  // ---------------------
   if (data.startsWith("NAV:")) {
     const action = data.split(":")[1];
 
     if (action === "HOME") return showHome(chatId);
 
     if (action === "MEMBERS") {
-      return editOrSend(chatId, `👥 عدد المشتركين في البوت:\n\n${MEMBERS_COUNT} مستخدم 🔥`, backToHomeKeyboard());
+      const all = Object.keys(users).length;
+      const active = Object.values(users).filter(x => x && x.isActive).length;
+      return editOrSend(chatId, `👥 عدد المشتركين:\n\n✅ الكل: ${all}\n🟢 الفعّالين: ${active}`, backToHomeKeyboard());
     }
 
     if (action === "STATS") {
@@ -503,7 +526,6 @@ bot.on("callback_query", async (q) => {
 
       await editOrSend(chatId, "📢 اشترك بالقنوات التالية للحصول على نقاط:", { inline_keyboard: buttons });
 
-      // تحقق شكلي (مثل كودك)
       setTimeout(() => {
         const uu = ensureUser(chatId);
         uu.points += CHANNEL_JOIN_POINTS;
@@ -515,7 +537,6 @@ bot.on("callback_query", async (q) => {
       return;
     }
 
-    // لوحة الأدمن القديمة
     if (action === "MAKE_POINTS_CODE") {
       if (!isAdmin(chatId)) return;
       u.state.tmp.admin = { step: "WAIT_POINTS_EACH" };
@@ -523,7 +544,7 @@ bot.on("callback_query", async (q) => {
       return bot.sendMessage(chatId, "✍️ اكتب عدد النقاط لكل شخص (مثلاً 10):");
     }
 
-    // خدمات -> قوائم كميات
+    // خدمات
     if (action === "SVC_TT_LIKES") return showQtyMenu(chatId, "❤️ لايكات تيك توك\nاختر الكمية:", "BUY:TTLIKES", ttLikePrices, "NAV:SERVICES");
     if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
     if (action === "SVC_TT_FREEVIEWS") {
@@ -538,13 +559,9 @@ bot.on("callback_query", async (q) => {
     if (action === "SVC_IG_LIKES") return showQtyMenu(chatId, "❤️ اعجابات إنستقرام\nاختر الكمية:", "BUY:IGLIKES", igLikePrices, "NAV:SERVICES");
     if (action === "SVC_IG_SHARES") return showQtyMenu(chatId, "🔁 مشاركات إنستقرام\nاختر الكمية:", "BUY:IGSHARES", igSharePrices, "NAV:SERVICES");
     if (action === "SVC_FB_STORY") return showQtyMenu(chatId, "📘 مشاهدات ستوري فيسبوك\nاختر الكمية:", "BUY:FBSTORY", fbStoryPrices, "NAV:SERVICES");
-
-    return;
   }
 
-  // ---------------------
-  // LOCKED: اختيار maxUses
-  // ---------------------
+  // بوابة الأكواد: اختيار maxUses
   if (data.startsWith("LOCKED_MAX:")) {
     if (!u.state?.tmp?.locked || u.state.tmp.locked.step !== "WAIT_MAX_CHOICE") return;
 
@@ -561,7 +578,6 @@ bot.on("callback_query", async (q) => {
     saveJSON(USERS_FILE, users);
 
     const flow = u.state.tmp.locked.flow;
-
     return editOrSend(
       chatId,
       `✅ جاهز للإنشاء\n\n🧾 الكود: ${flow.code}\n⭐️ النقاط لكل شخص: ${flow.points}\n👥 عدد المستخدمين: ${flow.maxUses}\n\n💸 كلفة الإنشاء: ${CREATE_CODE_COST} نقطة\nاضغط إنشاء:`,
@@ -569,14 +585,10 @@ bot.on("callback_query", async (q) => {
     );
   }
 
-  // ---------------------
-  // LOCKED: إنشاء الكود (خصم 10000)
-  // ---------------------
+  // إنشاء الكود
   if (data === "LOCKED_CREATE:DO") {
     const lock = u.state?.tmp?.locked;
-    if (!lock || lock.step !== "READY_CREATE") {
-      return bot.sendMessage(chatId, "❌ أكو نقص بالخطوات. افتح البوابة من جديد.");
-    }
+    if (!lock || lock.step !== "READY_CREATE") return bot.sendMessage(chatId, "❌ أكو نقص بالخطوات. افتح البوابة من جديد.");
 
     if (u.points < CREATE_CODE_COST) {
       return editOrSend(chatId, `❌ رصيدك غير كافي.\n\n💸 الكلفة: ${CREATE_CODE_COST}\n💎 رصيدك: ${u.points}`, backToHomeKeyboard());
@@ -588,7 +600,7 @@ bot.on("callback_query", async (q) => {
     const maxUses = parseInt(flow.maxUses, 10);
 
     if (!code) return bot.sendMessage(chatId, "❌ الكود فارغ.");
-    if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا. اكتب كود غيره.");
+    if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا.");
     if (!Number.isFinite(points) || points <= 0) return bot.sendMessage(chatId, "❌ نقاط الكود غير صحيحة.");
     if (!Number.isFinite(maxUses) || maxUses <= 0) return bot.sendMessage(chatId, "❌ عدد المستخدمين غير صحيح.");
 
@@ -615,11 +627,9 @@ bot.on("callback_query", async (q) => {
     );
   }
 
-  // ---------------------
-  // BUY: اختيار خدمة (يطلب رابط بعدين)
-  // ---------------------
+  // شراء خدمة
   if (data.startsWith("BUY:")) {
-    const parts = data.split(":"); // BUY, TYPE, QTY
+    const parts = data.split(":");
     const type = parts[1];
     const qty = parseInt(parts[2], 10);
 
@@ -627,25 +637,20 @@ bot.on("callback_query", async (q) => {
     let askText = "";
     let orderType = "";
 
-    if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط فيديو تيك توك:"; orderType = "ttlikes"; }
-    if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط فيديو تيك توك:"; orderType = "ttviews"; }
-    if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط فيديو تيك توك للمشاهدات المجانية:"; orderType = "freeviews"; }
-    
-    if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط القناة (لازم يبدأ بـ https://t.me/ ):"; orderType = "tgfollowers"; }
-    if (type === "IGLIKES") { cost = igLikePrices[qty] || 0; askText = "🔗 أرسل رابط منشور إنستقرام:"; orderType = "iglikes"; }
-    if (type === "IGSHARES") { cost = igSharePrices[qty] || 0; askText = "🔗 أرسل رابط منشور إنستقرام:"; orderType = "igshares"; }
-    if (type === "FBSTORY") { cost = fbStoryPrices[qty] || 0; askText = "🔗 أرسل رابط الستوري:"; orderType = "fbstory"; }
+    if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
+    if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
+    if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
+    if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط (https://t.me/..):"; orderType = "tgfollowers"; }
+    if (type === "IGLIKES") { cost = igLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "iglikes"; }
+    if (type === "IGSHARES") { cost = igSharePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "igshares"; }
+    if (type === "FBSTORY") { cost = fbStoryPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "fbstory"; }
 
     if (!orderType) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
-
-    // تحقق الرصيد للخدمات المدفوعة
     if (cost > 0 && !requireBalanceOrWarn(chatId, u, cost)) return;
 
-    // احسب رقم الخدمة
     const serviceKey = ORDER_TYPE_TO_SERVICE_KEY[orderType];
     const serviceId = serviceKey ? SERVICE_IDS[serviceKey] : null;
 
-    // خزّن pending
     setPending(chatId, { orderType, qty, cost, step: "WAIT_LINK", serviceId });
 
     await editOrSend(chatId, `✅ تم اختيار: ${qty}\n💰 السعر: ${cost}\n🧩 رقم الخدمة: ${serviceId ?? "غير معروف"}\n\n📩 الآن ارسل المطلوب بالرسالة التالية.`, {
@@ -657,39 +662,33 @@ bot.on("callback_query", async (q) => {
 });
 
 // =====================
-// 14) SINGLE MESSAGE HANDLER
-//    - secret open
-//    - pending service link => creates order with orderId + serviceId
-//    - locked flow steps
-//    - use code flow
-//    - share flow
-//    - admin flow
+// 15) SINGLE MESSAGE HANDLER
 // =====================
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const u = ensureUser(chatId);
   const text = normalizeText(msg.text);
 
-  // فتح لوحة الأدمن (مخفي)
+  u.lastSeen = new Date().toISOString();
+  u.isActive = true;
+  saveJSON(USERS_FILE, users);
+
   if (text === SECRET_OPEN) {
     if (!isAdmin(chatId)) return;
     return editOrSend(chatId, "✅ تم فتح لوحة الأدمن.", adminKeyboard());
   }
 
-  // =====================
-  // ✅ Pending Service Order: استلام الرابط + إنشاء طلب + رقم خدمة
-  // =====================
+  // استلام رابط الطلب + إرسال API لموقعك
   const pending = pendingOrders[chatId];
   if (pending && pending.step === "WAIT_LINK") {
     const link = text;
+    if (!link || link.length < 4) return bot.sendMessage(chatId, "❌ الرابط/المعرف غير صحيح. ارسله مرة ثانية.");
 
-    if (!link || link.length < 8) return bot.sendMessage(chatId, "❌ الرابط غير صحيح. ارسله مرة ثانية.");
-
-    // خصم الرصيد للخدمات المدفوعة
+    // خصم النقاط
     if (pending.cost > 0) {
       if (u.points < pending.cost) {
         clearPending(chatId);
-        return bot.sendMessage(chatId, `❌ رصيدك غير كافي لإكمال الطلب.\n💰 السعر: ${pending.cost}\n💎 رصيدك: ${u.points}`);
+        return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💰 السعر: ${pending.cost}\n💎 رصيدك: ${u.points}`);
       }
       u.points -= pending.cost;
       saveJSON(USERS_FILE, users);
@@ -707,37 +706,76 @@ bot.on("message", async (msg) => {
       link,
       status: "PENDING",
       createdAt: new Date().toISOString(),
+      remoteOrderId: null,
+      apiResponse: null,
+      apiError: null,
     };
 
     orders.push(order);
     saveOrders();
-
     clearPending(chatId);
+
+    // ✅ إرسال طلب حقيقي إلى موقعك
+    try {
+      if (!order.serviceId) throw new Error("Missing serviceId");
+
+      const apiResp = await sendOrderToYourBackend({
+        serviceId: order.serviceId,
+        link: order.link,
+        quantity: order.qty,
+        userUid: order.uid,
+        cost: order.cost,
+        orderType: order.orderType,
+      });
+
+      order.apiResponse = apiResp;
+
+      // حاول نقرأ رقم الطلب الخارجي بأكثر من شكل
+      const remote =
+        apiResp?.orderId || apiResp?.order_id || apiResp?.order || apiResp?.id || null;
+
+      if (remote) {
+        order.status = "SENT";
+        order.remoteOrderId = String(remote);
+      } else if (apiResp?.ok === true) {
+        order.status = "SENT";
+      } else {
+        order.status = "FAILED";
+        order.apiError = apiResp?.error ? String(apiResp.error) : JSON.stringify(apiResp);
+      }
+
+      saveOrders();
+    } catch (e) {
+      order.status = "FAILED";
+      order.apiError = e?.response?.data
+        ? JSON.stringify(e.response.data)
+        : (e?.message || String(e));
+      saveOrders();
+    }
+
+    const remoteTxt = order.remoteOrderId ? `\n🌐 رقم الطلب بالموقع: ${order.remoteOrderId}` : "";
+    const statusTxt = order.status === "SENT" ? "✅ تم الإرسال للموقع" : "❌ فشل الإرسال للموقع";
 
     bot.sendMessage(
       chatId,
-      `✅ تم إنشاء طلبك بنجاح!\n\n🧾 رقم الطلب: ${orderId}\n🧩 رقم الخدمة: ${order.serviceId ?? "غير معروف"}\n🛍 الخدمة: ${order.orderType}\n🔢 الكمية: ${order.qty}\n💰 السعر: ${order.cost}\n🔗 الرابط: ${order.link}\n\n💎 رصيدك الحالي: ${u.points}`
+      `✅ تم إنشاء طلبك!\n\n🧾 رقم الطلب: ${order.orderId}${remoteTxt}\n🧩 رقم الخدمة: ${order.serviceId ?? "غير معروف"}\n🔢 الكمية: ${order.qty}\n💰 السعر: ${order.cost}\n🔗 المطلوب: ${order.link}\n\n${statusTxt}\n💎 رصيدك الحالي: ${u.points}`
     );
 
-    // إرسال للأدمن
     bot.sendMessage(
       ADMIN_CHAT_ID,
-      `📥 طلب جديد\n\n🧾 رقم الطلب: ${orderId}\n🧩 رقم الخدمة: ${order.serviceId ?? "غير معروف"}\n👤 المستخدم: ${u.uid}\n🛍 الخدمة: ${order.orderType}\n🔢 الكمية: ${order.qty}\n💰 السعر: ${order.cost}\n🔗 الرابط: ${order.link}\n🕒 ${order.createdAt}`
+      `📥 طلب جديد\n\n🧾 رقم الطلب: ${order.orderId}\n🌐 خارجي: ${order.remoteOrderId ?? "-"}\n🧩 رقم الخدمة: ${order.serviceId ?? "غير معروف"}\n👤 المستخدم: ${order.uid}\n🛍 النوع: ${order.orderType}\n🔢 الكمية: ${order.qty}\n💰 السعر: ${order.cost}\n🔗 المطلوب: ${order.link}\n📌 الحالة: ${order.status}\n🕒 ${order.createdAt}\n${order.apiError ? `\n⚠️ خطأ API: ${order.apiError}` : ""}`
     ).catch(() => {});
 
     return;
   }
 
-  // =====================
-  // ✅ LOCKED FLOW (ID -> PASS -> CODE -> POINTS -> MAX USES -> CREATE)
-  // =====================
+  // بوابة الأكواد: خطوات الرسائل
   if (u.state?.tmp?.locked?.step === "WAIT_ID") {
     if (text !== u.uid) {
       u.state.tmp.locked = null;
       saveJSON(USERS_FILE, users);
       return bot.sendMessage(chatId, "❌ الايدي غير صحيح. ارجع اضغط زر البوابة من جديد.");
     }
-
     u.state.tmp.locked.step = "WAIT_PASS";
     saveJSON(USERS_FILE, users);
     return bot.sendMessage(chatId, "✅ تم التحقق من الايدي.\n\n🔐 اكتب كلمة السر:");
@@ -749,7 +787,6 @@ bot.on("message", async (msg) => {
       saveJSON(USERS_FILE, users);
       return bot.sendMessage(chatId, "❌ كلمة السر غير صحيحة.");
     }
-
     u.state.tmp.locked = { step: "WAIT_CODE", flow: {} };
     saveJSON(USERS_FILE, users);
     return bot.sendMessage(chatId, "✅ تم فتح البوابة.\n\n✍️ اكتب الكود اللي تريد تنشئه:");
@@ -759,11 +796,9 @@ bot.on("message", async (msg) => {
     const code = (text || "").trim();
     if (!code) return bot.sendMessage(chatId, "❌ اكتب كود صحيح.");
     if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا. اكتب كود غيره.");
-
     u.state.tmp.locked.flow = { code };
     u.state.tmp.locked.step = "WAIT_POINTS";
     saveJSON(USERS_FILE, users);
-
     return bot.sendMessage(chatId, "⭐️ اكتب كم نقطة يحصلون من هذا الكود؟ (مثلاً 10):");
   }
 
@@ -772,17 +807,13 @@ bot.on("message", async (msg) => {
     if (!Number.isFinite(points) || points <= 0) {
       return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0. اكتب النقاط مرة ثانية:");
     }
-
     u.state.tmp.locked.flow.points = points;
     u.state.tmp.locked.step = "WAIT_MAX_CHOICE";
     saveJSON(USERS_FILE, users);
-
     return editOrSend(chatId, "👥 اختر عدد الناس اللي يستخدمون الكود (1/2/3/4) أو تخطي:", maxUsesKeyboardLocked());
   }
 
-  // =====================
-  // ✅ Use Code Flow (WAIT_CODE -> WAIT_ID)
-  // =====================
+  // استخدام الكود
   if (u.state?.tmp?.useCode?.step === "WAIT_CODE") {
     const code = text;
     const codeData = codes[code];
@@ -804,7 +835,7 @@ bot.on("message", async (msg) => {
     if (codeData.usedBy.length >= codeData.maxUses) {
       u.state.tmp.useCode = null;
       saveJSON(USERS_FILE, users);
-      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته (وصل الحد الأقصى من الاستخدام).");
+      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته.");
     }
 
     u.state.tmp.useCode = { step: "WAIT_ID", code };
@@ -825,7 +856,7 @@ bot.on("message", async (msg) => {
     if (text !== u.uid) {
       u.state.tmp.useCode = null;
       saveJSON(USERS_FILE, users);
-      return bot.sendMessage(chatId, "❌ الـ ID اللي كتبته مو مالك. اكتب ID الصحيح الموجود بحسابك داخل البوت.");
+      return bot.sendMessage(chatId, "❌ الـ ID اللي كتبته مو مالك.");
     }
 
     codeData.usedBy = codeData.usedBy || [];
@@ -839,13 +870,12 @@ bot.on("message", async (msg) => {
     if (codeData.usedBy.length >= codeData.maxUses) {
       u.state.tmp.useCode = null;
       saveJSON(USERS_FILE, users);
-      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته (وصل الحد الأقصى).");
+      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته.");
     }
 
     u.points += codeData.points;
     codeData.usedBy.push(String(chatId));
 
-    // إذا وصل الحد نحذفه حتى المستخدم الخامس يطلعله انتهت صلاحيته
     if (codeData.usedBy.length >= codeData.maxUses) {
       delete codes[code];
     }
@@ -859,9 +889,7 @@ bot.on("message", async (msg) => {
     return bot.sendMessage(chatId, `✅ تم إضافة ${codeData.points} نقطة إلى حسابك.\n💎 رصيدك الحالي: ${u.points}`);
   }
 
-  // =====================
-  // ✅ Share Points Flow
-  // =====================
+  // مشاركة النقاط
   if (u.state?.tmp?.share?.step === "WAIT_FRIEND_ID") {
     const friendUid = text;
     u.state.tmp.share.friendUid = friendUid;
@@ -896,9 +924,7 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  // =====================
-  // ✅ Admin make points code (مثل كودك)
-  // =====================
+  // أدمن: إنشاء كود نقاط (مثل ستايلك)
   if (u.state?.tmp?.admin?.step === "WAIT_POINTS_EACH") {
     const pointsEach = parseInt(text, 10);
     if (!Number.isFinite(pointsEach) || pointsEach <= 0) {
@@ -906,7 +932,6 @@ bot.on("message", async (msg) => {
       saveJSON(USERS_FILE, users);
       return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
     }
-
     u.state.tmp.admin = { step: "WAIT_MAX_USES", pointsEach };
     saveJSON(USERS_FILE, users);
     return bot.sendMessage(chatId, "👥 اكتب عدد الأشخاص اللي يقدرون يستخدمون الكود (مثلاً 4):");
@@ -926,10 +951,7 @@ bot.on("message", async (msg) => {
     if (u.points < totalCost) {
       u.state.tmp.admin = null;
       saveJSON(USERS_FILE, users);
-      return bot.sendMessage(
-        chatId,
-        `❌ رصيدك غير كافي لإنشاء هذا الكود.\n\n⭐️ لكل شخص: ${pointsEach}\n👥 العدد: ${maxUses}\n💸 الكلفة: ${totalCost}\n💎 رصيدك: ${u.points}`
-      );
+      return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💸 الكلفة: ${totalCost}\n💎 رصيدك: ${u.points}`);
     }
 
     u.points -= totalCost;
@@ -941,10 +963,11 @@ bot.on("message", async (msg) => {
     codes[code] = {
       points: pointsEach,
       usedBy: [],
-      maxUses: maxUses,
+      maxUses,
       createdBy: u.uid,
       createdAt: new Date().toISOString(),
     };
+
     saveCodes();
 
     u.state.tmp.admin = null;
@@ -952,8 +975,8 @@ bot.on("message", async (msg) => {
 
     return bot.sendMessage(
       chatId,
-      `✅ تم إنشاء الكود بنجاح!\n\n🧾 الكود: ${code}\n⭐️ يعطي لكل شخص: ${pointsEach} نقطة\n👥 عدد المستخدمين: ${maxUses}\n💸 تم خصم: ${totalCost}\n💎 رصيدك الحالي: ${u.points}`,
-      { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع للأقسام", callback_data: "NAV:HOME" }]] } }
+      `✅ تم إنشاء الكود!\n\n🧾 الكود: ${code}\n⭐️ لكل شخص: ${pointsEach}\n👥 العدد: ${maxUses}\n💸 تم خصم: ${totalCost}\n💎 رصيدك الحالي: ${u.points}`,
+      { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] } }
     );
   }
 });
