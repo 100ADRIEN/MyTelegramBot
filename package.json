@@ -20,9 +20,9 @@
   "homepage": "https://github.com/100ADRIEN/MyTelegramBot#readme",
   "dependencies": {
     "axios": "^1.13.5",
+    "ioredis": "^5.9.3",
     "moment": "^2.30.1",
     "node-telegram-bot-api": "^0.67.0",
-    "qs": "^6.15.0",
-    "ioredis": "^5.4.1"
+    "qs": "^6.15.0"
   }
 }
