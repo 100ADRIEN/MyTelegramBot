@@ -365,6 +365,7 @@ if (query.data === "recharge_points") {
                 [{ text: "🎵 لايكات تيك توك", callback_data: "tiktok_services" }],
                 [{ text: "👁 مشاهدات تيك توك", callback_data: "tiktok_views" }],
                 [{ text: "👥 متابعين تيك توك", callback_data: "tiktok_followers" }],
+                [{ text: "👥 متابعين تلجرام", callback_data: "telegram_followers" }],
                 [{ text: "❤️ اعجابات إنستقرام", callback_data: "instagram_likes" }],
                 [{ text: "🔁 مشاركات إنستقرام", callback_data: "instagram_shares" }],
                 [{ text: "📘 مشاهدات ستوري فيسبوك", callback_data: "fb_story_views" }],
@@ -383,6 +384,7 @@ const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 مشاهدات ستوري فيس
 const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
 const IG_LIKES_SERVICE_ID = 10641;
 const TIKTOK_FOLLOWERS_SERVICE_ID = 10601; // 👥 متابعين تيك توك
+const TELEGRAM_FOLLOWERS_SERVICE_ID = 10612; // 👥 متابعين تلجرام
   
 let pendingOrders = {};
 
@@ -429,6 +431,61 @@ const fbStoryPrices = {
     50: 200,
     100: 270
 };
+
+  if (query.data === "telegram_followers") {
+    bot.sendMessage(chatId, "👥 متابعين تلجرام\nاختر الكمية:", {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: "10 متابع - 80 عملة", callback_data: "tgf_10" }],
+                [{ text: "20 متابع - 160 عملة", callback_data: "tgf_20" }],
+                [{ text: "30 متابع - 210 عملة", callback_data: "tgf_30" }],
+                [{ text: "40 متابع - 260 عملة", callback_data: "tgf_40" }],
+                [{ text: "50 متابع - 310 عملة", callback_data: "tgf_50" }],
+                [{ text: "500 متابع - 600 عملة", callback_data: "tgf_500" }],
+                [{ text: "1000 متابع - 1000 عملة", callback_data: "tgf_1000" }],
+                [{ text: "🔙 رجوع", callback_data: "recharge_points" }]
+            ]
+        }
+    });
+}
+
+  const telegramFollowerPrices = {
+    10: 80,
+    20: 160,
+    30: 210,
+    40: 260,
+    50: 310,
+    500: 600,
+    1000: 1000
+};
+
+  if (query.data.startsWith("tgf_")) {
+    const quantity = parseInt(query.data.split("_")[1]);
+    const cost = telegramFollowerPrices[quantity];
+    const user = users[chatId];
+
+    if (!user) {
+        return bot.sendMessage(chatId, "❌ حدث خطأ في حسابك.");
+    }
+
+    if (user.points < cost) {
+        return bot.sendMessage(chatId,
+`❌ للأسف نقاطك غير كافية.
+
+💰 سعر الخدمة: ${cost}
+💎 رصيدك الحالي: ${user.points}`);
+    }
+
+    pendingOrders[chatId] = {
+        quantity,
+        cost,
+        type: "tgfollowers"
+    };
+
+    bot.sendMessage(chatId,
+`🔗 أرسل رابط قناة أو حساب تلجرام الآن للحصول على ${quantity} متابع 👥`);
+}
+  
 
   if (query.data === "tiktok_followers") {
     bot.sendMessage(chatId, "👥 متابعين تيك توك\nاختر الكمية:", {
@@ -704,6 +761,7 @@ bot.on("message", async (msg) => {
     type === "freeviews" ? 10869 :
     type === "iglikes" ? 10641 :
     type === "ttfollowers" ? 10601 :
+    type === "tgfollowers" ? 10612 :
     10880;
 
         const response = await axios.post(
