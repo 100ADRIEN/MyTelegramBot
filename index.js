@@ -414,28 +414,35 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
   u.lastSeen = new Date().toISOString();
   u.isActive = true;
-  saveJSON(USERS_FILE, users);
 
   const payload = match && match[1] ? match[1].trim() : null;
+
   if (payload && payload.startsWith("ref_")) {
-    const refUid = payload.replace("ref_", "");
-    if (!u.referredBy && refUid !== u.uid) {
+    const refUid = payload.slice(4); // بعد ref_
+    // ✅ ينحسب مرة وحدة فقط + يمنع إحالة النفس
+    if (!u.referredBy && refUid && refUid !== u.uid) {
       const refChatId = Object.keys(users).find(cid => users[cid]?.uid === refUid);
+
       if (refChatId) {
         u.referredBy = refUid;
-        users[refChatId].points += REFERRAL_BONUS;
+
+        users[refChatId].points = (users[refChatId].points || 0) + REFERRAL_BONUS;
         users[refChatId].referrals = users[refChatId].referrals || [];
-        users[refChatId].referrals.push(chatId);
+        users[refChatId].referrals.push(String(chatId));
 
         saveJSON(USERS_FILE, users);
-        bot.sendMessage(refChatId, `🎉 انضم عضو جديد عبر رابطك!\n✅ تمت إضافة ${REFERRAL_BONUS} نقطة لحسابك 💰`);
+
+        bot.sendMessage(
+          refChatId,
+          `🎉 انضم عضو جديد عبر رابطك!\n✅ تمت إضافة ${REFERRAL_BONUS} نقطة لحسابك 💰`
+        ).catch(() => {});
       }
     }
   }
 
+  saveJSON(USERS_FILE, users);
   await showHome(chatId);
 });
-
 // =====================
 // 14) CALLBACK ROUTER
 // =====================
