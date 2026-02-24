@@ -513,8 +513,8 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         // =========================
 
         // ✅ إذا ماكو رشق + مشترك بالقناة => كمل كودك الطبيعي (نقاط)
-        users[refChatId].points = (users[refChatId].points  0) + REFERRAL_BONUS;
-        users[refChatId].referrals = users[refChatId].referrals  [];
+        users[refChatId].points = (users[refChatId].points || 0) + REFERRAL_BONUS;
+        users[refChatId].referrals = users[refChatId].referrals || [];
         users[refChatId].referrals.push(chatId);
 
         saveJSON(USERS_FILE, users);
