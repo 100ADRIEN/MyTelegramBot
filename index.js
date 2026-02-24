@@ -408,6 +408,53 @@ function genCode(len = 10) {
 // =====================
 // 13) /start
 // =====================
+// ✅✅ إضافات (لا تمس كودك) — حطهن فوق /start
+const BOT_CHANNEL = "@balul344"; // <-- غيّرها لقناتك
+const REF_WINDOW_MS = 10 * 60 * 1000; // 10 دقائق
+const REF_MAX_IN_WINDOW = 5;          // أكثر من 5 إحالات خلال النافذة = رشق
+const REF_BLOCK_MS = 60 * 60 * 1000;  // حظر ساعة على الإحالات (للمُحيل المشبوه)
+
+function _now() { return Date.now(); }
+
+async function isJoinedChannel(userId) {
+  try {
+    const m = await bot.getChatMember(BOT_CHANNEL, userId);
+    return ["member", "administrator", "creator"].includes(m.status);
+  } catch (e) {
+    return false;
+  }
+}
+
+function markAndCheckReferrerSuspicious(refChatId) {
+  if (!users[refChatId]) return true;
+
+  users[refChatId].refStats = users[refChatId].refStats || { stamps: [], blockedUntil: 0 };
+
+  const t = _now();
+
+  // إذا محظور
+  if (users[refChatId].refStats.blockedUntil && users[refChatId].refStats.blockedUntil > t) {
+    return true;
+  }
+
+  // نظف النافذة
+  users[refChatId].refStats.stamps = (users[refChatId].refStats.stamps || [])
+    .filter(s => (t - s) <= REF_WINDOW_MS);
+
+  // سجل محاولة إحالة
+  users[refChatId].refStats.stamps.push(t);
+
+  // إذا تجاوز الحد => اعتبر رشق واحبس الإحالات
+  if (users[refChatId].refStats.stamps.length > REF_MAX_IN_WINDOW) {
+    users[refChatId].refStats.blockedUntil = t + REF_BLOCK_MS;
+    return true;
+  }
+
+  return false;
+}
+
+
+// ✅ كودك نفسه + إضافات شرطين فقط داخل بلوك الإحالة
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
   const chatId = String(msg.chat.id);
 
@@ -437,8 +484,37 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
       if (refChatId) {
         u.referredBy = refUid;
 
-        users[refChatId].points = (users[refChatId].points || 0) + REFERRAL_BONUS;
-        users[refChatId].referrals = users[refChatId].referrals || [];
+        // =========================
+        // ✅✅ (الشرط الثاني القوي) لازم العضو الجديد يكون مشترك بالقناة
+        // إذا مو مشترك => ما تنحسب إحالة وماكو نقاط
+        const joined = await isJoinedChannel(msg.from.id);
+        if (!joined) {
+          // نخليها referredBy مسجلة (مثل ما انت كاتب) بس بدون نقاط إطلاقاً
+          saveJSON(USERS_FILE, users);
+          bot.sendMessage(chatId, "❌ حتى تنحسب الإحالة لازم تشترك بالقناة أولاً.").catch(() => {});
+          await showHome(chatId);
+          return;
+        }
+
+        // ✅✅ (الشرط الأول) كشف الرشق على المُحيل => نقاط = 0 نهائياً
+        const suspicious = markAndCheckReferrerSuspicious(refChatId);
+        if (suspicious) {
+          // ما نضيف نقاط ولا referrals (خليها 0)
+          saveJSON(USERS_FILE, users);
+
+          bot.sendMessage(
+            refChatId,
+            "⚠️ تم رصد نشاط إحالات غير طبيعي (رشق).\n❌ تم تعطيل نقاط الإحالة مؤقتاً."
+          ).catch(() => {});
+
+          await showHome(chatId);
+          return;
+        }
+        // =========================
+
+        // ✅ إذا ماكو رشق + مشترك بالقناة => كمل كودك الطبيعي (نقاط)
+        users[refChatId].points = (users[refChatId].points  0) + REFERRAL_BONUS;
+        users[refChatId].referrals = users[refChatId].referrals  [];
         users[refChatId].referrals.push(chatId);
 
         saveJSON(USERS_FILE, users);
