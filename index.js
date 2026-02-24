@@ -990,4 +990,8 @@ bot.on("message", async (msg) => {
       { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] } }
     );
   }
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> ab91def (resolve merge)
