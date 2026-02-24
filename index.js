@@ -231,7 +231,11 @@ function servicesKeyboard() {
       [{ text: "❤️ لايكات تيك توك", callback_data: "NAV:SVC_TT_LIKES" }],
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
-      [{ text: "👥 متابعين تلجرام", callback_data: "NAV:SVC_TG_FOLLOWERS" }],
+      [{ text: "🎁 مشاهدات فيديو تيك توك مجاناً", callback_data: "NAV:SVC_FREE_TT_VIEWS" }],
+      [{ text: "🎁 مشاهدات ريلز انستقرام مجاناً", callback_data: "NAV:SVC_FREE_IG_REELS" }],
+      [{ text: "🎁 مشاهدات بوست تويتر مجاناً", callback_data: "NAV:SVC_FREE_TW_POST" }],
+      [{ text: "🎁 مشاهدات تغريدة تويتر مجاناً", callback_data: "NAV:SVC_FREE_TW_TWEET" }],
+      [{ text: "🎁 تفاعل بوست تلگرام مجاناً", callback_data: "NAV:SVC_FREE_TG_REACT" }],
       [{ text: "❤️ اعجابات إنستقرام", callback_data: "NAV:SVC_IG_LIKES" }],
       [{ text: "🔁 مشاركات إنستقرام", callback_data: "NAV:SVC_IG_SHARES" }],
       [{ text: "📘 مشاهدات ستوري فيسبوك", callback_data: "NAV:SVC_FB_STORY" }],
@@ -466,6 +470,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
   u.lastSeen = new Date().toISOString();
   u.isActive = true;
 
+
   const payload = match && match[1] ? String(match[1]).trim() : null;
 
   // ✅ نظام الإحالة:
@@ -644,11 +649,64 @@ bot.on("callback_query", async (q) => {
         ],
       });
     }
+
+    if (action === "SVC_FREE_TT_VIEWS") {
+  const s = freeServices.TT_FREE_VIEWS;
+  return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
+    inline_keyboard: [
+      [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TT_FREE_VIEWS" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+    ],
+  });
+}
+
+if (action === "SVC_FREE_IG_REELS") {
+  const s = freeServices.IG_FREE_REELS;
+  return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
+    inline_keyboard: [
+      [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:IG_FREE_REELS" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+    ],
+  });
+}
+
+if (action === "SVC_FREE_TW_POST") {
+  const s = freeServices.TW_FREE_POST;
+  return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
+    inline_keyboard: [
+      [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TW_FREE_POST" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+    ],
+  });
+}
+
+if (action === "SVC_FREE_TW_TWEET") {
+  const s = freeServices.TW_FREE_TWEET;
+  return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
+    inline_keyboard: [
+      [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TW_FREE_TWEET" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+    ],
+  });
+}
+
+if (action === "SVC_FREE_TG_REACT") {
+  const s = freeServices.TG_FREE_REACT;
+  return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
+    inline_keyboard: [
+      [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TG_FREE_REACT" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+    ],
+  });
+}
+
     if (action === "SVC_TG_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تلجرام\nاختر الكمية:", "BUY:TGFOLLOW", tgFollowerPrices, "NAV:SERVICES");
     if (action === "SVC_IG_LIKES") return showQtyMenu(chatId, "❤️ اعجابات إنستقرام\nاختر الكمية:", "BUY:IGLIKES", igLikePrices, "NAV:SERVICES");
     if (action === "SVC_IG_SHARES") return showQtyMenu(chatId, "🔁 مشاركات إنستقرام\nاختر الكمية:", "BUY:IGSHARES", igSharePrices, "NAV:SERVICES");
     if (action === "SVC_FB_STORY") return showQtyMenu(chatId, "📘 مشاهدات ستوري فيسبوك\nاختر الكمية:", "BUY:FBSTORY", fbStoryPrices, "NAV:SERVICES");
   }
+
+
 
   // بوابة الأكواد: اختيار maxUses
   if (data.startsWith("LOCKED_MAX:")) {
@@ -726,6 +784,34 @@ bot.on("callback_query", async (q) => {
     let askText = "";
     let orderType = "";
 
+    const freeServices = {
+  TT_FREE_VIEWS: {
+    title: "🎁 مشاهدات فيديو تيك توك مجاناً",
+    serviceId: 10869,
+    askText: "🔗 أرسل رابط فيديو تيك توك:",
+  },
+  IG_FREE_REELS: {
+    title: "🎁 مشاهدات ريلز انستقرام مجاناً",
+    serviceId: 10870,
+    askText: "🔗 أرسل رابط ريلز انستقرام:",
+  },
+  TW_FREE_POST: {
+    title: "🎁 مشاهدات بوست تويتر مجاناً",
+    serviceId: 10871,
+    askText: "🔗 أرسل رابط بوست تويتر:",
+  },
+  TW_FREE_TWEET: {
+    title: "🎁 مشاهدات تغريدة تويتر مجاناً",
+    serviceId: 10872,
+    askText: "🔗 أرسل رابط التغريدة:",
+  },
+  TG_FREE_REACT: {
+    title: "🎁 تفاعل بوست تلگرام مجاناً",
+    serviceId: 10913,
+    askText: "🔗 أرسل رابط بوست تلگرام:",
+  },
+};
+
     if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
     if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
     if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
@@ -748,6 +834,28 @@ bot.on("callback_query", async (q) => {
     return bot.sendMessage(chatId, askText);
   }
 });
+
+
+// ✅ خدمات مجانية بدون باقات
+if (type === "FREE") {
+  const key = parts[2]; // مثل TT_FREE_VIEWS
+  const s = freeServices[key];
+  if (!s) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
+
+  const cost = 0;
+  const qty = 0; // ماكو كمية
+  const orderType = `free:${key}`;
+  const serviceId = s.serviceId;
+
+  setPending(chatId, { orderType, qty, cost, step: "WAIT_LINK", serviceId });
+
+  await editOrSend(chatId,
+    `✅ تم اختيار خدمة مجانية\n🧩 رقم الخدمة: ${serviceId}\n\n📩 الآن ارسل الرابط بالرسالة التالية.`,
+    { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }]] }
+  );
+
+  return bot.sendMessage(chatId, s.askText);
+}
 
 // =====================
 // 15) SINGLE MESSAGE HANDLER
