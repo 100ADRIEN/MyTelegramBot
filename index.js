@@ -409,35 +409,37 @@ function genCode(len = 10) {
 // 13) /start
 // =====================
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
-  const chatId = msg.chat.id;
+  const chatId = String(msg.chat.id);
+
+  // ✅ الشرط الأول: هل هذا المستخدم جديد (ما كان موجود بالملف قبل)؟
+  const isBrandNewUser = !users[chatId];
+
   const u = ensureUser(chatId);
 
   u.lastSeen = new Date().toISOString();
   u.isActive = true;
 
-  const payload = match && match[1] ? match[1].trim() : null;
+  const payload = match && match[1] ? String(match[1]).trim() : null;
 
-  // ✅ نظام الإحالة: فقط للمستخدم الجديد (أول مرة) ومنع إحالة النفس
-  if (payload && payload.startsWith("ref_")) {
-    const refUid = payload.slice(4); // بعد ref_
+  // ✅ نظام الإحالة:
+  // - فقط إذا المستخدم جديد فعلاً
+  // - وداخل من رابط ref_
+  // - وما سبق أخذ إحالة
+  // - ومنع إحالة النفس
+  if (isBrandNewUser && payload && payload.startsWith("ref_")) {
+    const refUid = payload.slice(4);
 
-    // المستخدم "جديد" = ما عنده referredBy من قبل
     if (!u.referredBy && refUid && refUid !== u.uid) {
       const refChatId = Object.keys(users).find(
         (cid) => users[cid]?.uid === refUid
       );
 
-      // لازم المُحيل موجود عندنا
       if (refChatId) {
-        // ثبت المُحيل حتى ما يعيدها مرة ثانية
         u.referredBy = refUid;
 
-        // زيد نقاط للمُحيل
         users[refChatId].points = (users[refChatId].points || 0) + REFERRAL_BONUS;
-
-        // سجل العضو الجديد ضمن referrals (اختياري)
         users[refChatId].referrals = users[refChatId].referrals || [];
-        users[refChatId].referrals.push(String(chatId));
+        users[refChatId].referrals.push(chatId);
 
         saveJSON(USERS_FILE, users);
 
