@@ -71,7 +71,7 @@
     },
     "state": {
       "page": "HOME",
-      "lastMsgId": 18729,
+      "lastMsgId": 18938,
       "tmp": {
         "locked": null,
         "lockedVerifiedAt": "2026-02-23T18:22:18.691Z",
@@ -81,7 +81,7 @@
     "uid": "5192648202",
     "isActive": true,
     "createdAt": "2026-02-23T21:27:17.185Z",
-    "lastSeen": "2026-02-24T02:30:22.199Z"
+    "lastSeen": "2026-02-24T03:08:04.707Z"
   },
   "8404821044": {
     "id": 2193319917,
@@ -457,9 +457,9 @@
   },
   "5980330569": {
     "refCode": "4592341679",
-    "points": 0,
+    "points": 30,
     "joinedChannels": [],
-    "lastGift": null,
+    "lastGift": "2026-02-24T03:03:20.996Z",
     "referrals": [],
     "referredBy": null,
     "ui": {
@@ -468,12 +468,19 @@
     "uid": "3726124610",
     "state": {
       "page": "HOME",
-      "lastMsgId": 18684,
-      "tmp": {}
+      "lastMsgId": 18937,
+      "tmp": {
+        "locked": null,
+        "useCode": null,
+        "share": {
+          "step": "WAIT_AMOUNT",
+          "friendUid": "/start"
+        }
+      }
     },
     "isActive": true,
     "createdAt": "2026-02-24T02:07:44.000Z",
-    "lastSeen": "2026-02-24T02:07:44.008Z"
+    "lastSeen": "2026-02-24T03:08:42.240Z"
   },
   "5891303238": {
     "uid": "6305821596",
@@ -489,6 +496,42 @@
       "page": "HOME",
       "lastMsgId": 18680,
       "tmp": {}
+    }
+  },
+  "6857246064": {
+    "uid": "9393046801",
+    "points": 0,
+    "joinedChannels": [],
+    "lastGift": "2026-02-24T03:03:56.259Z",
+    "referrals": [],
+    "referredBy": null,
+    "isActive": true,
+    "createdAt": "2026-02-24T03:03:51.887Z",
+    "lastSeen": "2026-02-24T03:04:09.485Z",
+    "state": {
+      "page": "HOME",
+      "lastMsgId": 18882,
+      "tmp": {
+        "share": null
+      }
+    }
+  },
+  "5703392949": {
+    "uid": "6160128103",
+    "points": 0,
+    "joinedChannels": [],
+    "lastGift": "2026-02-24T03:04:23.434Z",
+    "referrals": [],
+    "referredBy": null,
+    "isActive": true,
+    "createdAt": "2026-02-24T03:04:17.961Z",
+    "lastSeen": "2026-02-24T03:04:32.267Z",
+    "state": {
+      "page": "HOME",
+      "lastMsgId": 18890,
+      "tmp": {
+        "share": null
+      }
     }
   }
 }
