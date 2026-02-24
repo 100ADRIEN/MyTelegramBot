@@ -103,7 +103,7 @@ let users = loadJSON(USERS_FILE, {});
 let pendingOrders = loadJSON(PENDING_FILE, {});
 let orders = loadJSON(ORDERS_FILE, []);
 let codes = loadJSON(CODES_FILE, {
-  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000000000000000000, usedBy: [], maxUses: 1 },
+  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
   BOT100: { points: 50, usedBy: [], maxUses: 5 },
   Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
 });
@@ -169,7 +169,7 @@ function setPage(chatId, page) {
 // =====================
 async function sendOrderDirect({ service, link, quantity }) {
   const payload = {
-    key: cbfc807f1983d1ee38283a3c19219a9b,
+    key: API_KEY,
     action: "add",
     service,
     link,
@@ -990,8 +990,4 @@ bot.on("message", async (msg) => {
       { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] } }
     );
   }
-<<<<<<< HEAD
 });
-=======
-});
->>>>>>> ab91def (resolve merge)
