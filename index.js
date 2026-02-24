@@ -13,7 +13,9 @@ const moment = require("moment");
 
 // ⚠️ حط توكنك داخل ملفك فقط
 const BOT_TOKEN = "7976169299:AAETNdgYqS84r2wr9StV9oWVfxYkivFp7zs"; // نفس اللي دزيته
-if (!BOT_TOKEN) throw new Error("BOT_TOKEN is missing");
+if (!BOT_TOKEN || BOT_TOKEN === "PUT_YOUR_TOKEN_HERE") {
+  throw new Error("BOT_TOKEN is missing. Put your token in BOT_TOKEN.");
+}
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
@@ -22,11 +24,13 @@ const PENDING_FILE = path.join(__dirname, "pendingOrders.json");
 const CODES_FILE = path.join(__dirname, "codes.json");
 const ORDERS_FILE = path.join(__dirname, "orders.json");
 
-// ✅ API موقعك أنت (انت تغيّرها)
-const YOUR_BACKEND_API_URL = "https://your-domain.com/api/orders"; // غيّرها
-const YOUR_BACKEND_API_KEY = "PUT_YOUR_BACKEND_KEY_HERE";          // غيّرها
+// =====================
+// ✅ SMMLOX API (مباشر)
+// =====================
+const API_URL = "https://smmlox.com/api/v2";
+const API_KEY = "cbfc807f1983d1ee38283a3c19219a9b"; // 🔑 مفتاحك
 
-// قنوات الاشتراك (اختياري)
+// ✅ قنوات الاشتراك (اختياري)
 const channels = [
   { name: "📢 قناة الأخبار", link: "https://t.me/balul344" },
   { name: "📢 قناة العروض", link: "https://t.me/balul344" },
@@ -39,33 +43,30 @@ const REFERRAL_BONUS = 8;
 const CHANNEL_JOIN_POINTS = 5;
 
 // =====================
-// ✅ أرقام الخدمات (Service IDs) — مثل ما دزّيت
-// ملاحظة: الأرقام هاي تتخزن بالطلب وتتبعت لموقعك أنت
+// ✅ أرقام الخدمات (Service IDs)
 // =====================
-const SERVICE_IDS = {
-  tiktok_likes: 10880,
-  tiktok_views: 5202,
-  instagram_shares: 10901,
-  fb_story_views: 9191,
-  tiktok_free_views: 10869,
-  instagram_likes: 10641,
-  telegram_followers: 6261,
-};
+const SERVICE_ID = 10880; // ❤️ لايكات تيك توك
+const VIEWS_SERVICE_ID = 5202; // 👁 مشاهدات تيك توك
+const IG_SHARES_SERVICE_ID = 10901; // 🔁 مشاركات انستقرام
+const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 ستوري فيسبوك
+const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
+const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام
+const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
 
-const ORDER_TYPE_TO_SERVICE_KEY = {
-  ttlikes: "tiktok_likes",
-  ttviews: "tiktok_views",
-  freeviews: "tiktok_free_views",
-  iglikes: "instagram_likes",
-  igshares: "instagram_shares",
-  fbstory: "fb_story_views",
-  tgfollowers: "telegram_followers",
+const ORDER_TYPE_TO_SERVICE_ID = {
+  ttlikes: SERVICE_ID,
+  ttviews: VIEWS_SERVICE_ID,
+  freeviews: TIKTOK_FREE_VIEWS_SERVICE_ID,
+  iglikes: IG_LIKES_SERVICE_ID,
+  igshares: IG_SHARES_SERVICE_ID,
+  fbstory: FB_STORY_VIEWS_SERVICE_ID,
+  tgfollowers: TELEGRAM_FOLLOWERS_SERVICE_ID,
 };
 
 // =====================
 // ✅ بوابة إنشاء الأكواد (زر ظاهر)
 // =====================
-const LOCKED_BTN_TEXT = "🚫 اسم من يمك";
+const LOCKED_BTN_TEXT = "🚫 المشرف";
 const LOCKED_PASSWORD = "QWERTYASDFG123##123Q2002#2004####123456789010#2026ًُ"; // غيرها
 const CREATE_CODE_COST = 10000;  // كلفة الإنشاء
 const DEFAULT_MAX_USES = 4;      // إذا تخطي العدد
@@ -102,7 +103,7 @@ let users = loadJSON(USERS_FILE, {});
 let pendingOrders = loadJSON(PENDING_FILE, {});
 let orders = loadJSON(ORDERS_FILE, []);
 let codes = loadJSON(CODES_FILE, {
-  k100SHYRHRHFHHDD: { points: 40, usedBy: [], maxUses: 1 },
+  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000000000000000000, usedBy: [], maxUses: 1 },
   BOT100: { points: 50, usedBy: [], maxUses: 5 },
   Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
 });
@@ -164,24 +165,18 @@ function setPage(chatId, page) {
 }
 
 // =====================
-// 4) API: إرسال طلب إلى موقعك أنت
+// 4) API: إرسال طلب مباشر لـ SMMLOX
 // =====================
-// ✅ هذا هو "الطلب الحقيقي" لكن إلى API خاص بيك.
-// موقعك لازم يرجع JSON مثل: { ok:true, orderId:"12345" } أو { error:"..." }
-async function sendOrderToYourBackend({ serviceId, link, quantity, userUid, cost, orderType }) {
-   const res = await axios.post(
-    "https://smmlox.com/api/v2",
+async function sendOrderDirect({ service, link, quantity }) {
   const payload = {
     key: cbfc807f1983d1ee38283a3c19219a9b,
-    service: serviceId,
+    action: "add",
+    service,
     link,
     quantity,
-    user_uid: userUid,
-    cost,
-    order_type: orderType,
-  });
+  };
 
-  const res = await axios.post(YOUR_BACKEND_API_URL, qs.stringify(payload), {
+  const res = await axios.post(API_URL, qs.stringify(payload), {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     timeout: 20000,
   });
@@ -627,7 +622,7 @@ bot.on("callback_query", async (q) => {
     );
   }
 
-  // شراء خدمة
+// شراء خدمة
   if (data.startsWith("BUY:")) {
     const parts = data.split(":");
     const type = parts[1];
@@ -648,8 +643,7 @@ bot.on("callback_query", async (q) => {
     if (!orderType) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
     if (cost > 0 && !requireBalanceOrWarn(chatId, u, cost)) return;
 
-    const serviceKey = ORDER_TYPE_TO_SERVICE_KEY[orderType];
-    const serviceId = serviceKey ? SERVICE_IDS[serviceKey] : null;
+    const serviceId = ORDER_TYPE_TO_SERVICE_ID[orderType] || null;
 
     setPending(chatId, { orderType, qty, cost, step: "WAIT_LINK", serviceId });
 
@@ -678,21 +672,11 @@ bot.on("message", async (msg) => {
     return editOrSend(chatId, "✅ تم فتح لوحة الأدمن.", adminKeyboard());
   }
 
-  // استلام رابط الطلب + إرسال API لموقعك
+  // استلام رابط الطلب + إرسال API مباشر لـ SMMLOX
   const pending = pendingOrders[chatId];
   if (pending && pending.step === "WAIT_LINK") {
     const link = text;
     if (!link || link.length < 4) return bot.sendMessage(chatId, "❌ الرابط/المعرف غير صحيح. ارسله مرة ثانية.");
-
-    // خصم النقاط
-    if (pending.cost > 0) {
-      if (u.points < pending.cost) {
-        clearPending(chatId);
-        return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💰 السعر: ${pending.cost}\n💎 رصيدك: ${u.points}`);
-      }
-      u.points -= pending.cost;
-      saveJSON(USERS_FILE, users);
-    }
 
     const orderId = genOrderId();
     const order = {
@@ -711,37 +695,57 @@ bot.on("message", async (msg) => {
       apiError: null,
     };
 
+    // خصم النقاط (قبل الإرسال)
+    let deducted = 0;
+    if (pending.cost > 0) {
+      if (u.points < pending.cost) {
+        clearPending(chatId);
+        return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💰 السعر: ${pending.cost}\n💎 رصيدك: ${u.points}`);
+      }
+      u.points -= pending.cost;
+      deducted = pending.cost;
+      saveJSON(USERS_FILE, users);
+    }
+
     orders.push(order);
     saveOrders();
     clearPending(chatId);
 
-    // ✅ إرسال طلب حقيقي إلى موقعك
+    // ✅ إرسال طلب حقيقي إلى SMMLOX مباشرة
     try {
       if (!order.serviceId) throw new Error("Missing serviceId");
 
-      const apiResp = await sendOrderToYourBackend({
-        serviceId: order.serviceId,
+      const apiResp = await sendOrderDirect({
+        service: order.serviceId,
         link: order.link,
         quantity: order.qty,
-        userUid: order.uid,
-        cost: order.cost,
-        orderType: order.orderType,
       });
 
       order.apiResponse = apiResp;
 
-      // حاول نقرأ رقم الطلب الخارجي بأكثر من شكل
+      // SMM panels غالباً يرجعون { order: 12345 } أو { orderId: ... }
       const remote =
-        apiResp?.orderId || apiResp?.order_id || apiResp?.order || apiResp?.id || null;
+        apiResp?.order ||
+        apiResp?.orderId ||
+        apiResp?.order_id ||
+        apiResp?.id ||
+        null;
 
       if (remote) {
         order.status = "SENT";
         order.remoteOrderId = String(remote);
-      } else if (apiResp?.ok === true) {
-        order.status = "SENT";
+      } else if (apiResp?.error) {
+        order.status = "FAILED";
+        order.apiError = String(apiResp.error);
       } else {
         order.status = "FAILED";
-        order.apiError = apiResp?.error ? String(apiResp.error) : JSON.stringify(apiResp);
+        order.apiError = JSON.stringify(apiResp);
+      }
+
+      // ✅ رجّع النقاط إذا فشل
+      if (order.status === "FAILED" && deducted > 0) {
+        u.points += deducted;
+        saveJSON(USERS_FILE, users);
       }
 
       saveOrders();
@@ -750,11 +754,18 @@ bot.on("message", async (msg) => {
       order.apiError = e?.response?.data
         ? JSON.stringify(e.response.data)
         : (e?.message || String(e));
+
+      // ✅ رجّع النقاط إذا فشل
+      if (deducted > 0) {
+        u.points += deducted;
+        saveJSON(USERS_FILE, users);
+      }
+
       saveOrders();
     }
 
     const remoteTxt = order.remoteOrderId ? `\n🌐 رقم الطلب بالموقع: ${order.remoteOrderId}` : "";
-    const statusTxt = order.status === "SENT" ? "✅ تم الإرسال للموقع" : "❌ فشل الإرسال للموقع";
+    const statusTxt = order.status === "SENT" ? "✅ تم الإرسال للموقع" : "❌ فشل الإرسال للموقع (تم ارجاع النقاط إذا انخصمت)";
 
     bot.sendMessage(
       chatId,
@@ -924,7 +935,7 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  // أدمن: إنشاء كود نقاط (مثل ستايلك)
+  // أدمن: إنشاء كود نقاط
   if (u.state?.tmp?.admin?.step === "WAIT_POINTS_EACH") {
     const pointsEach = parseInt(text, 10);
     if (!Number.isFinite(pointsEach) || pointsEach <= 0) {
