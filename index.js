@@ -37,7 +37,7 @@ const channels = [
 ];
 
 // نقاط الإحالة
-const REFERRAL_BONUS = 8;
+const REFERRAL_BONUS = 30;
 
 // نقاط الاشتراك بالقنوات
 const CHANNEL_JOIN_POINTS = 5;
