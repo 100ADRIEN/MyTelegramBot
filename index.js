@@ -417,16 +417,25 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
   const payload = match && match[1] ? match[1].trim() : null;
 
+  // ✅ نظام الإحالة: فقط للمستخدم الجديد (أول مرة) ومنع إحالة النفس
   if (payload && payload.startsWith("ref_")) {
     const refUid = payload.slice(4); // بعد ref_
-    // ✅ ينحسب مرة وحدة فقط + يمنع إحالة النفس
-    if (!u.referredBy && refUid && refUid !== u.uid) {
-      const refChatId = Object.keys(users).find(cid => users[cid]?.uid === refUid);
 
+    // المستخدم "جديد" = ما عنده referredBy من قبل
+    if (!u.referredBy && refUid && refUid !== u.uid) {
+      const refChatId = Object.keys(users).find(
+        (cid) => users[cid]?.uid === refUid
+      );
+
+      // لازم المُحيل موجود عندنا
       if (refChatId) {
+        // ثبت المُحيل حتى ما يعيدها مرة ثانية
         u.referredBy = refUid;
 
+        // زيد نقاط للمُحيل
         users[refChatId].points = (users[refChatId].points || 0) + REFERRAL_BONUS;
+
+        // سجل العضو الجديد ضمن referrals (اختياري)
         users[refChatId].referrals = users[refChatId].referrals || [];
         users[refChatId].referrals.push(String(chatId));
 
