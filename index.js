@@ -49,14 +49,10 @@ const SERVICE_ID = 10880; // ❤️ لايكات تيك توك
 const VIEWS_SERVICE_ID = 5202; // 👁 مشاهدات تيك توك
 const IG_SHARES_SERVICE_ID = 10901; // 🔁 مشاركات انستقرام
 const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 ستوري فيسبوك
-const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية (قديمة عندك)
-const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام (قديم)
+const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
+const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام
 const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
 
-// ✅ خدمة لايكات انستقرام الجديدة
-const IG_LIKES_10891_SERVICE_ID = 10891;
-
-// ========= خريطة orderType -> serviceId =========
 const ORDER_TYPE_TO_SERVICE_ID = {
   ttlikes: SERVICE_ID,
   ttviews: VIEWS_SERVICE_ID,
@@ -65,18 +61,7 @@ const ORDER_TYPE_TO_SERVICE_ID = {
   igshares: IG_SHARES_SERVICE_ID,
   fbstory: FB_STORY_VIEWS_SERVICE_ID,
   tgfollowers: TELEGRAM_FOLLOWERS_SERVICE_ID,
-
-  // ✅ مجانيات (زر واحد)
-  free_ttviews: 10869,
-  free_igreels: 10870,
-  free_twpost: 10871,
-  free_twtweet: 10872,
-  free_tgreact: 10913,
-
-  // ✅ باقات لايكات انستقرام 10891
-  iglikes10891: IG_LIKES_10891_SERVICE_ID,
 };
-
 
 // =====================
 // ✅ بوابة إنشاء الأكواد (زر ظاهر)
@@ -245,23 +230,10 @@ function servicesKeyboard() {
     inline_keyboard: [
       [{ text: "❤️ لايكات تيك توك", callback_data: "NAV:SVC_TT_LIKES" }],
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
-
-      // القديم عندك (100 مشاهدة مجانية)
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
-
-      // ✅ مجانيات (زر واحد)
-      [{ text: "🎁 مشاهدات فيديو تيك توك مجاناً", callback_data: "NAV:SVC_FREE_TT_VIEWS" }],
-      [{ text: "🎁 مشاهدات ريلز انستقرام مجاناً", callback_data: "NAV:SVC_FREE_IG_REELS" }],
-      [{ text: "🎁 مشاهدات بوست تويتر مجاناً", callback_data: "NAV:SVC_FREE_TW_POST" }],
-      [{ text: "🎁 مشاهدات تغريدة تويتر مجاناً", callback_data: "NAV:SVC_FREE_TW_TWEET" }],
-      [{ text: "🎁 تفاعل بوست تلگرام مجاناً", callback_data: "NAV:SVC_FREE_TG_REACT" }],
-
       [{ text: "❤️ اعجابات إنستقرام", callback_data: "NAV:SVC_IG_LIKES" }],
-      [{ text: "❤️ لايكات انستقرام (10891)", callback_data: "NAV:SVC_IG_LIKES_10891" }],
       [{ text: "🔁 مشاركات إنستقرام", callback_data: "NAV:SVC_IG_SHARES" }],
       [{ text: "📘 مشاهدات ستوري فيسبوك", callback_data: "NAV:SVC_FB_STORY" }],
-      [{ text: "👥 متابعين تلجرام", callback_data: "NAV:SVC_TG_FOLLOWERS" }],
-
       [{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }],
     ],
   };
@@ -350,43 +322,6 @@ const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
 const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
 const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
 const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
-
-// ✅ باقات 10891 حسب طلبك
-const igLikes10891Prices = { 50: 600, 100: 1000, 150: 1600, 300: 2600, 1000: 11000 };
-
-// ========= مجانيات (بدون باقات) =========
-const freeServices = {
-  TT_FREE_VIEWS: {
-    title: "🎁 مشاهدات فيديو تيك توك مجاناً",
-    serviceId: 10869,
-    askText: "🔗 أرسل رابط فيديو تيك توك:",
-    orderType: "free_ttviews",
-  },
-  IG_FREE_REELS: {
-    title: "🎁 مشاهدات ريلز انستقرام مجاناً",
-    serviceId: 10870,
-    askText: "🔗 أرسل رابط ريلز انستقرام:",
-    orderType: "free_igreels",
-  },
-  TW_FREE_POST: {
-    title: "🎁 مشاهدات بوست تويتر مجاناً",
-    serviceId: 10871,
-    askText: "🔗 أرسل رابط بوست تويتر:",
-    orderType: "free_twpost",
-  },
-  TW_FREE_TWEET: {
-    title: "🎁 مشاهدات تغريدة تويتر مجاناً",
-    serviceId: 10872,
-    askText: "🔗 أرسل رابط التغريدة:",
-    orderType: "free_twtweet",
-  },
-  TG_FREE_REACT: {
-    title: "🎁 تفاعل بوست تلگرام مجاناً",
-    serviceId: 10913,
-    askText: "🔗 أرسل رابط بوست تلگرام:",
-    orderType: "free_tgreact",
-  },
-};
 
 // =====================
 // 9) MENUS HELPERS
@@ -529,8 +464,6 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
   u.lastSeen = new Date().toISOString();
   u.isActive = true;
-  
-
 
   const payload = match && match[1] ? String(match[1]).trim() : null;
 
@@ -714,59 +647,6 @@ bot.on("callback_query", async (q) => {
     if (action === "SVC_IG_LIKES") return showQtyMenu(chatId, "❤️ اعجابات إنستقرام\nاختر الكمية:", "BUY:IGLIKES", igLikePrices, "NAV:SERVICES");
     if (action === "SVC_IG_SHARES") return showQtyMenu(chatId, "🔁 مشاركات إنستقرام\nاختر الكمية:", "BUY:IGSHARES", igSharePrices, "NAV:SERVICES");
     if (action === "SVC_FB_STORY") return showQtyMenu(chatId, "📘 مشاهدات ستوري فيسبوك\nاختر الكمية:", "BUY:FBSTORY", fbStoryPrices, "NAV:SERVICES");
-
-     // ===== خدمات مجانية (زر واحد) =====
-    if (action === "SVC_FREE_TT_VIEWS") {
-      const s = freeServices.TT_FREE_VIEWS;
-      return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
-        inline_keyboard: [
-          [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TT_FREE_VIEWS" }],
-          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
-        ],
-      });
-    }
-
-    if (action === "SVC_FREE_IG_REELS") {
-      const s = freeServices.IG_FREE_REELS;
-      return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
-        inline_keyboard: [
-          [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:IG_FREE_REELS" }],
-          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
-        ],
-      });
-    }
-
-    if (action === "SVC_FREE_TW_POST") {
-      const s = freeServices.TW_FREE_POST;
-      return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
-        inline_keyboard: [
-          [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TW_FREE_POST" }],
-          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
-        ],
-      });
-    }
-
-    if (action === "SVC_FREE_TW_TWEET") {
-      const s = freeServices.TW_FREE_TWEET;
-      return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
-        inline_keyboard: [
-          [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TW_FREE_TWEET" }],
-          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
-        ],
-      });
-    }
-
-    if (action === "SVC_FREE_TG_REACT") {
-      const s = freeServices.TG_FREE_REACT;
-      return editOrSend(chatId, `${s.title}\n\n✅ الخدمة مجانية بالكامل`, {
-        inline_keyboard: [
-          [{ text: "✅ ارسل الرابط", callback_data: "BUY:FREE:TG_FREE_REACT" }],
-          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
-        ],
-      });
-    }
-
-    return;
   }
 
   // بوابة الأكواد: اختيار maxUses
@@ -845,34 +725,14 @@ bot.on("callback_query", async (q) => {
     let askText = "";
     let orderType = "";
 
-     // مدفوع (مثل كودك)
     if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
     if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
     if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
     if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط (https://t.me/..):"; orderType = "tgfollowers"; }
     if (type === "IGLIKES") { cost = igLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "iglikes"; }
-    if (type === "IGLIKES10891") { cost = igLikes10891Prices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "iglikes10891"; }
     if (type === "IGSHARES") { cost = igSharePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "igshares"; }
     if (type === "FBSTORY") { cost = fbStoryPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "fbstory"; }
-// ✅ دعم كل الخدمات المجانية بدون باقات
-if (type === "FREE") {
-  const key = parts[2]; // مثل TT_FREE_VIEWS
 
-  const freeMap = {
-    TT_FREE_VIEWS:  { orderType: "free_ttviews",   ask: "🔗 أرسل رابط فيديو تيك توك:" },
-    IG_FREE_REELS:  { orderType: "free_igreels",   ask: "🔗 أرسل رابط ريلز انستقرام:" },
-    TW_FREE_POST:   { orderType: "free_twpost",    ask: "🔗 أرسل رابط بوست تويتر:" },
-    TW_FREE_TWEET:  { orderType: "free_twtweet",   ask: "🔗 أرسل رابط التغريدة:" },
-    TG_FREE_REACT:  { orderType: "free_tgreact",   ask: "🔗 أرسل رابط بوست تلجرام:" },
-  };
-
-  const f = freeMap[key];
-  if (f) {
-    cost = 0;
-    askText = f.ask;
-    orderType = f.orderType;
-  }
-}
     if (!orderType) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
     if (cost > 0 && !requireBalanceOrWarn(chatId, u, cost)) return;
 
