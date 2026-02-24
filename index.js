@@ -310,7 +310,7 @@ async function editOrSend(chatId, text, keyboard) {
 // 7) REFERRAL
 // =====================
 function makeReferralLink(u) {
-  const botUsername = "AnimeShadomBot"; // غيره ليوزر بوتك الحقيقي
+  const botUsername = "BlueMoonBot_2025Bot"; // غيره ليوزر بوتك الحقيقي
   return `https://t.me/${botUsername}?start=ref_${u.uid}`;
 }
 
