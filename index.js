@@ -52,6 +52,7 @@ const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 ستوري فيسبوك
 const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
 const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام
 const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
+const TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID = 10932; // 👥 متابعين تيك توك (مدى الحياة)
 
 const ORDER_TYPE_TO_SERVICE_ID = {
   ttlikes: SERVICE_ID,
@@ -61,6 +62,8 @@ const ORDER_TYPE_TO_SERVICE_ID = {
   igshares: IG_SHARES_SERVICE_ID,
   fbstory: FB_STORY_VIEWS_SERVICE_ID,
   tgfollowers: TELEGRAM_FOLLOWERS_SERVICE_ID,
+  ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
+  
 };
 
 // =====================
@@ -230,6 +233,7 @@ function servicesKeyboard() {
     inline_keyboard: [
       [{ text: "❤️ لايكات تيك توك", callback_data: "NAV:SVC_TT_LIKES" }],
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
+      [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
       [{ text: "❤️ اعجابات إنستقرام", callback_data: "NAV:SVC_IG_LIKES" }],
       [{ text: "🔁 مشاركات إنستقرام", callback_data: "NAV:SVC_IG_SHARES" }],
@@ -322,7 +326,7 @@ const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
 const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
 const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
 const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
-
+const ttFollowersPrices = { 500: 5000, 1000: 10000, 30: 2000 }; // مثال (غيرها حسب سعر نقاطك)
 // =====================
 // 9) MENUS HELPERS
 // =====================
@@ -635,6 +639,7 @@ bot.on("callback_query", async (q) => {
     // خدمات
     if (action === "SVC_TT_LIKES") return showQtyMenu(chatId, "❤️ لايكات تيك توك\nاختر الكمية:", "BUY:TTLIKES", ttLikePrices, "NAV:SERVICES");
     if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
+    if (action === "SVC_TT_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", "BUY:TTFOLLOW", ttFollowersPrices, "NAV:SERVICES");
     if (action === "SVC_TT_FREEVIEWS") {
       return editOrSend(chatId, "🎁 مشاهدات تيك توك مجانية\n\nكل 100 مشاهدة = 0 عملة", {
         inline_keyboard: [
@@ -727,6 +732,7 @@ bot.on("callback_query", async (q) => {
 
     if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
     if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
+    if (type === "TTFOLLOW") { cost = ttFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب تيك توك:"; orderType = "ttfollowers"; }
     if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
     if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط (https://t.me/..):"; orderType = "tgfollowers"; }
     if (type === "IGLIKES") { cost = igLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "iglikes"; }
