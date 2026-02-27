@@ -1,5 +1,31 @@
 "use strict";
+// =====================
+// 🔥 FIREBASE SETUP
+// =====================
+const admin = require("firebase-admin");
 
+let db = null;
+let firebaseEnabled = false;
+
+function initFirebase() {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      databaseURL: process.env.FIREBASE_DB_URL,
+    });
+
+    db = admin.database();
+    firebaseEnabled = true;
+
+    console.log("🔥 Firebase Connected");
+  } catch (e) {
+    console.log("⚠️ Firebase not enabled, fallback to JSON");
+  }
+}
+
+initFirebase();
 const TelegramBot = require("node-telegram-bot-api");
 const fs = require("fs");
 const path = require("path");
@@ -83,20 +109,38 @@ const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
 // =====================
 // 2) HELPERS: load/save
 // =====================
-function loadJSON(file, fallback) {
-  try {
-    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (e) {
-    console.error("loadJSON error:", e);
+async function loadJson(path, fallback) {
+  if (!firebaseEnabled) {
+    try {
+      if (!fs.existsSync(path)) return fallback;
+      return JSON.parse(fs.readFileSync(path, "utf8"));
+    } catch (e) {
+      console.error("❌ loadJson error:", e);
+      return fallback;
+    }
   }
-  return fallback;
+
+  try {
+    const key = path.replace(".json", "");
+    const snap = await db.ref(key).once("value");
+    return snap.val() || fallback;
+  } catch (e) {
+    console.error("❌ Firebase load error:", e);
+    return fallback;
+  }
 }
 
-function saveJSON(file, data) {
+async function saveJson(path, data) {
+  if (!firebaseEnabled) {
+    fs.writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
+    return;
+  }
+
   try {
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+    const key = path.replace(".json", "");
+    await db.ref(key).set(data);
   } catch (e) {
-    console.error("saveJSON error:", e);
+    console.error("❌ Firebase save error:", e);
   }
 }
 
@@ -104,17 +148,25 @@ function normalizeText(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
 
-let users = loadJSON(USERS_FILE, {});
-let pendingOrders = loadJSON(PENDING_FILE, {});
-let orders = loadJSON(ORDERS_FILE, []);
-let codes = loadJSON(CODES_FILE, {
-  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
-  BOT100: { points: 50, usedBy: [], maxUses: 5 },
-  Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
-});
+let users = {};
+let pendingOrders = {};
+let orders = [];
+let codes = {};
 
-function saveCodes() { saveJSON(CODES_FILE, codes); }
-function saveOrders() { saveJSON(ORDERS_FILE, orders); }
+async function loadAllData() {
+  users = await loadJSON(USERS_FILE, {});
+  pendingOrders = await loadJSON(PENDING_FILE, {});
+  orders = await loadJSON(ORDERS_FILE, []);
+  codes = await loadJSON(CODES_FILE, {
+    k100SHYRHRHFHHDD: { poinhgjjuyytfrdbjjts: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
+    BOT100: { points: 50, usedBy: [], maxUses: 5 },
+    Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
+  });
+}
+
+(async () => {
+  await loadAllData();
+})();
 
 // =====================
 // 3) USERS + STATE
@@ -1104,4 +1156,3 @@ bot.on("message", async (msg) => {
   }
   
 });
-
