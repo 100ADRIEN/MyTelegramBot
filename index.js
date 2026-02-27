@@ -130,17 +130,23 @@ async function loadJson(path, fallback) {
   }
 }
 
-async function saveJson(path, data) {
+async function loadJSON(file, fallback) {
   if (!firebaseEnabled) {
-    fs.writeFileSync(path, JSON.stringify(data, null, 2), "utf8");
-    return;
+    try {
+      if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
+    } catch (e) {
+      console.error("loadJSON error:", e);
+    }
+    return fallback;
   }
 
   try {
-    const key = path.replace(".json", "");
-    await db.ref(key).set(data);
+    const key = file.replace(".json", "");
+    const snap = await db.ref(key).once("value");
+    return snap.val() || fallback;
   } catch (e) {
-    console.error("❌ Firebase save error:", e);
+    console.error("Firebase load error:", e);
+    return fallback;
   }
 }
 
@@ -171,7 +177,7 @@ async function loadAllData() {
 // =====================
 // 3) USERS + STATE
 // =====================
-function ensureUser(chatId) {
+async function ensureUser(chatId) {
   if (!users[chatId]) {
     users[chatId] = {
       uid: String(Math.floor(1000000000 + Math.random() * 9000000000)),
@@ -185,10 +191,10 @@ function ensureUser(chatId) {
       lastSeen: new Date().toISOString(),
       state: { page: "HOME", lastMsgId: null, tmp: {} },
     };
-    saveJSON(USERS_FILE, users);
+
+    await saveJson(USERS_FILE, users);
     return users[chatId];
   }
-
   const u = users[chatId];
 
   if (!u.uid) u.uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
