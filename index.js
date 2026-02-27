@@ -1159,10 +1159,5 @@ bot.on("message", async (msg) => {
       `✅ تم إنشاء الكود!\n\n🧾 الكود: ${code}\n⭐️ لكل شخص: ${pointsEach}\n👥 العدد: ${maxUses}\n💸 تم خصم: ${totalCost}\n💎 رصيدك الحالي: ${u.points}`,
       { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] } }
     );
-  }
-  
-<<<<<<< HEAD
+  } 
 });
-=======
-});
->>>>>>> df7fcbb (update bot)
