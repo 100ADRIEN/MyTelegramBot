@@ -53,6 +53,7 @@ const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك
 const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام
 const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
 const TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID = 10932; // 👥 متابعين تيك توك (مدى الحياة)
+const IG_FOLLOWERS_LIFETIME_SERVICE_ID = 10945; // 👥 متابعين انستقرام (مدى الحياة)
 
 const ORDER_TYPE_TO_SERVICE_ID = {
   ttlikes: SERVICE_ID,
@@ -63,6 +64,7 @@ const ORDER_TYPE_TO_SERVICE_ID = {
   fbstory: FB_STORY_VIEWS_SERVICE_ID,
   tgfollowers: TELEGRAM_FOLLOWERS_SERVICE_ID,
   ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
+  igfollowers: IG_FOLLOWERS_LIFETIME_SERVICE_ID,
   
 };
 
@@ -235,6 +237,7 @@ function servicesKeyboard() {
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
       [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
+      [{ text: "👥 متابعين إنستقرام (مدى الحياة)", callback_data: "NAV:SVC_IG_FOLLOWERS" }],
       [{ text: "❤️ اعجابات إنستقرام", callback_data: "NAV:SVC_IG_LIKES" }],
       [{ text: "🔁 مشاركات إنستقرام", callback_data: "NAV:SVC_IG_SHARES" }],
       [{ text: "📘 مشاهدات ستوري فيسبوك", callback_data: "NAV:SVC_FB_STORY" }],
@@ -327,6 +330,14 @@ const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
 const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
 const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
 const ttFollowersPrices = { 500: 5000, 1000: 10000, 30: 2000 }; // مثال (غيرها حسب سعر نقاطك)
+const igFollowersPrices = {
+  10: 500,
+  30: 1000,
+  100: 3000,
+  500: 5000,
+  1000: 10000,
+};
+
 // =====================
 // 9) MENUS HELPERS
 // =====================
@@ -648,6 +659,7 @@ bot.on("callback_query", async (q) => {
         ],
       });
     }
+    if (action === "SVC_IG_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين إنستقرام (مدى الحياة)\nاختر الكمية:", "BUY:IGFOLLOW", igFollowersPrices, "NAV:SERVICES");
     if (action === "SVC_TG_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تلجرام\nاختر الكمية:", "BUY:TGFOLLOW", tgFollowerPrices, "NAV:SERVICES");
     if (action === "SVC_IG_LIKES") return showQtyMenu(chatId, "❤️ اعجابات إنستقرام\nاختر الكمية:", "BUY:IGLIKES", igLikePrices, "NAV:SERVICES");
     if (action === "SVC_IG_SHARES") return showQtyMenu(chatId, "🔁 مشاركات إنستقرام\nاختر الكمية:", "BUY:IGSHARES", igSharePrices, "NAV:SERVICES");
@@ -738,6 +750,7 @@ bot.on("callback_query", async (q) => {
     if (type === "IGLIKES") { cost = igLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "iglikes"; }
     if (type === "IGSHARES") { cost = igSharePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "igshares"; }
     if (type === "FBSTORY") { cost = fbStoryPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "fbstory"; }
+    if (type === "IGFOLLOW") { cost = igFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب إنستقرام:"; orderType = "igfollowers"; }
 
     if (!orderType) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
     if (cost > 0 && !requireBalanceOrWarn(chatId, u, cost)) return;
