@@ -1,31 +1,5 @@
 "use strict";
-// =====================
-// 🔥 FIREBASE SETUP
-// =====================
-const admin = require("firebase-admin");
 
-let db = null;
-let firebaseEnabled = false;
-
-function initFirebase() {
-  try {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: process.env.FIREBASE_DB_URL,
-    });
-
-    db = admin.database();
-    firebaseEnabled = true;
-
-    console.log("🔥 Firebase Connected");
-  } catch (e) {
-    console.log("⚠️ Firebase not enabled, fallback to JSON");
-  }
-}
-
-initFirebase();
 const TelegramBot = require("node-telegram-bot-api");
 const fs = require("fs");
 const path = require("path");
@@ -109,44 +83,20 @@ const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
 // =====================
 // 2) HELPERS: load/save
 // =====================
-async function loadJson(path, fallback) {
-  if (!firebaseEnabled) {
-    try {
-      if (!fs.existsSync(path)) return fallback;
-      return JSON.parse(fs.readFileSync(path, "utf8"));
-    } catch (e) {
-      console.error("❌ loadJson error:", e);
-      return fallback;
-    }
-  }
-
+function loadJSON(file, fallback) {
   try {
-    const key = path.replace(".json", "");
-    const snap = await db.ref(key).once("value");
-    return snap.val() || fallback;
+    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch (e) {
-    console.error("❌ Firebase load error:", e);
-    return fallback;
+    console.error("loadJSON error:", e);
   }
+  return fallback;
 }
 
-async function loadJSON(file, fallback) {
-  if (!firebaseEnabled) {
-    try {
-      if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch (e) {
-      console.error("loadJSON error:", e);
-    }
-    return fallback;
-  }
-
+function saveJSON(file, data) {
   try {
-    const key = file.replace(".json", "");
-    const snap = await db.ref(key).once("value");
-    return snap.val() || fallback;
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
   } catch (e) {
-    console.error("Firebase load error:", e);
-    return fallback;
+    console.error("saveJSON error:", e);
   }
 }
 
@@ -154,30 +104,22 @@ function normalizeText(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
 
-let users = {};
-let pendingOrders = {};
-let orders = [];
-let codes = {};
+let users = loadJSON(USERS_FILE, {});
+let pendingOrders = loadJSON(PENDING_FILE, {});
+let orders = loadJSON(ORDERS_FILE, []);
+let codes = loadJSON(CODES_FILE, {
+  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
+  BOT100: { points: 50, usedBy: [], maxUses: 5 },
+  Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
+});
 
-async function loadAllData() {
-  users = await loadJSON(USERS_FILE, {});
-  pendingOrders = await loadJSON(PENDING_FILE, {});
-  orders = await loadJSON(ORDERS_FILE, []);
-  codes = await loadJSON(CODES_FILE, {
-    k100SHYRHRHFHHDD: { poinhgjjuyytfrdbjjts: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
-    BOT100: { points: 50, usedBy: [], maxUses: 5 },
-    Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
-  });
-}
-
-(async () => {
-  await loadAllData();
-})();
+function saveCodes() { saveJSON(CODES_FILE, codes); }
+function saveOrders() { saveJSON(ORDERS_FILE, orders); }
 
 // =====================
 // 3) USERS + STATE
 // =====================
-async function ensureUser(chatId) {
+function ensureUser(chatId) {
   if (!users[chatId]) {
     users[chatId] = {
       uid: String(Math.floor(1000000000 + Math.random() * 9000000000)),
@@ -191,10 +133,10 @@ async function ensureUser(chatId) {
       lastSeen: new Date().toISOString(),
       state: { page: "HOME", lastMsgId: null, tmp: {} },
     };
-
-    await saveJson(USERS_FILE, users);
+    saveJSON(USERS_FILE, users);
     return users[chatId];
   }
+
   const u = users[chatId];
 
   if (!u.uid) u.uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
@@ -1159,5 +1101,6 @@ bot.on("message", async (msg) => {
       `✅ تم إنشاء الكود!\n\n🧾 الكود: ${code}\n⭐️ لكل شخص: ${pointsEach}\n👥 العدد: ${maxUses}\n💸 تم خصم: ${totalCost}\n💎 رصيدك الحالي: ${u.points}`,
       { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] } }
     );
-  } 
+  }
+  
 });
