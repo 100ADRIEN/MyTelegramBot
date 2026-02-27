@@ -1,3 +1,10 @@
-BOT_TOKEN=توكن_بوتك
-FIREBASE_DB_URL=https://fffff-9743f-default-rtdb.firebaseio.com/
-FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"fffff-9743f",...الخ كامل JSON مالك}
+BOT_TOKEN=8180003779:AAEV56m-bYGKniVpRyHf4nseael60FWYn64
+API_URL=https://smmlox.com/api/v2
+API_KEY=cbfc807f1983d1ee38283a3c19219a9b
+
+FIREBASE_DB_URL=https://fffff-9743f-default-rtdb.firebaseio.com
+FIREBASE_SERVICE_ACCOUNT_PATH=./fffff-9743f-firebase-adminsdk-fbsvc-d061cd5468a12efc98765074359f6aa6bf1a88b4.json
+
+ADMIN_CHAT_ID=5571001437
+BOT_USERNAME=BlueMoonBot_2025Bot
+BOT_CHANNEL=@balul344
