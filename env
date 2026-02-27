@@ -1,0 +1,3 @@
+BOT_TOKEN=توكن_بوتك
+FIREBASE_DB_URL=https://fffff-9743f-default-rtdb.firebaseio.com/
+FIREBASE_SERVICE_ACCOUNT={"type":"service_account","project_id":"fffff-9743f",...الخ كامل JSON مالك}

@@ -37,7 +37,7 @@
     },
     "state": {
       "page": "HOME",
-      "lastMsgId": 18743,
+      "lastMsgId": 23544,
       "tmp": {
         "locked": {
           "step": "READY_CREATE",
@@ -54,7 +54,7 @@
     "uid": "5571001437",
     "isActive": true,
     "createdAt": "2026-02-23T21:27:17.171Z",
-    "lastSeen": "2026-02-24T02:36:31.663Z"
+    "lastSeen": "2026-02-27T07:42:34.980Z"
   },
   "7891980641": {
     "id": 5192648202,
@@ -71,7 +71,7 @@
     },
     "state": {
       "page": "HOME",
-      "lastMsgId": 18938,
+      "lastMsgId": 23518,
       "tmp": {
         "locked": null,
         "lockedVerifiedAt": "2026-02-23T18:22:18.691Z",
@@ -81,7 +81,7 @@
     "uid": "5192648202",
     "isActive": true,
     "createdAt": "2026-02-23T21:27:17.185Z",
-    "lastSeen": "2026-02-24T03:08:04.707Z"
+    "lastSeen": "2026-02-27T07:40:39.230Z"
   },
   "8404821044": {
     "id": 2193319917,
@@ -89,7 +89,17 @@
     "joinedChannels": [
       "https://t.me/balul344"
     ],
-    "lastGift": "2026-02-21T16:32:18.185Z"
+    "lastGift": "2026-02-21T16:32:18.185Z",
+    "uid": "9182514765",
+    "referrals": [],
+    "state": {
+      "page": "HOME",
+      "lastMsgId": 23508,
+      "tmp": {}
+    },
+    "isActive": true,
+    "createdAt": "2026-02-27T07:40:23.200Z",
+    "lastSeen": "2026-02-27T07:40:23.215Z"
   },
   "8422581054": {
     "id": 6802040781,
@@ -531,6 +541,24 @@
       "lastMsgId": 18890,
       "tmp": {
         "share": null
+      }
+    }
+  },
+  "8062101301": {
+    "uid": "6400751843",
+    "points": 0,
+    "joinedChannels": [],
+    "lastGift": null,
+    "referrals": [],
+    "referredBy": null,
+    "isActive": true,
+    "createdAt": "2026-02-27T07:40:23.222Z",
+    "lastSeen": "2026-02-27T07:41:27.243Z",
+    "state": {
+      "page": "HOME",
+      "lastMsgId": 23524,
+      "tmp": {
+        "useCode": null
       }
     }
   }

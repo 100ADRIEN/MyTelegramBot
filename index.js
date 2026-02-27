@@ -1161,4 +1161,8 @@ bot.on("message", async (msg) => {
     );
   }
   
+<<<<<<< HEAD
 });
+=======
+});
+>>>>>>> df7fcbb (update bot)
