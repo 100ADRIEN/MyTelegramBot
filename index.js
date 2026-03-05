@@ -8,7 +8,6 @@ const qs = require("qs");
 const moment = require("moment");
 const { MongoClient } = require("mongodb");
 
-
 // =====================
 // 1) CONFIG
 // =====================
@@ -170,6 +169,10 @@ const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
 // 2) HELPERS: load/save
 // =====================
 
+// =====================
+// 2) HELPERS: load/save  ✅ FIXED
+// =====================
+
 function loadJSONSafe(file, fallback) {
   const bak = file + ".bak";
   try {
@@ -181,8 +184,43 @@ function loadJSONSafe(file, fallback) {
     console.error("loadJSONSafe main failed:", file, e);
   }
 
-  // =====================
-// ✅ Mongo Users Persist (الحل النهائي للنقاط)
+  // جرّب نسخة احتياطية
+  try {
+    if (fs.existsSync(bak)) {
+      const raw = fs.readFileSync(bak, "utf8");
+      if (raw && raw.trim().length) return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error("loadJSONSafe bak failed:", bak, e);
+  }
+
+  return fallback;
+}
+
+function saveJSONSafe(file, data) {
+  const tmp = file + ".tmp";
+  const bak = file + ".bak";
+  try {
+    const json = JSON.stringify(data, null, 2);
+
+    // اكتب ملف مؤقت
+    fs.writeFileSync(tmp, json, "utf8");
+
+    // انسخ القديم كنسخة احتياطية
+    if (fs.existsSync(file)) {
+      try { fs.copyFileSync(file, bak); } catch (_) {}
+    }
+
+    // بدّل بشكل آمن
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    console.error("saveJSONSafe error:", file, e);
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
+  }
+}
+
+// =====================
+// ✅ Mongo Users Persist (FIXED)
 // =====================
 let saveUsersTimer = null;
 
@@ -218,30 +256,30 @@ async function flushUsersToMongo() {
   await col.bulkWrite(ops, { ordered: false });
 }
 
+// ✅ هذه هي الدالة الصح: تحفظ محلي + تسوي مزامنة Mongo بدون recursion
 function saveUsers() {
-  // 1) احفظ محلي (اختياري)
-  saveUsers();
+  // 1) حفظ محلي (حتى لو Mongo فصل)
+  saveJSONSafe(USERS_FILE, users);
 
-  // 2) احفظ على Mongo (هو الأهم)
+  // 2) حفظ على Mongo (Debounce)
   if (!db) return;
   clearTimeout(saveUsersTimer);
   saveUsersTimer = setTimeout(() => {
-    flushUsersToMongo().catch(() => {});
+    flushUsersToMongo().catch((e) => {
+      console.log("❌ flushUsersToMongo error:", e?.message || e);
+    });
   }, 400);
 }
 
-  // جرّب نسخة احتياطية
-  try {
-    if (fs.existsSync(bak)) {
-      const raw = fs.readFileSync(bak, "utf8");
-      if (raw && raw.trim().length) return JSON.parse(raw);
-    }
-  } catch (e) {
-    console.error("loadJSONSafe bak failed:", bak, e);
-  }
-
-  return fallback;
+// ✅ لما ينطفي السيرفر حاول احفظ آخر نسخة
+async function shutdownAndSave() {
+  try { saveJSONSafe(USERS_FILE, users); } catch (_) {}
+  try { await flushUsersToMongo(); } catch (_) {}
+  process.exit(0);
 }
+
+process.on("SIGINT", shutdownAndSave);
+process.on("SIGTERM", shutdownAndSave);
 
 function saveJSONSafe(file, data) {
   const tmp = file + ".tmp";
@@ -282,27 +320,7 @@ let codes = loadJSONSafe(CODES_FILE, {
 function saveCodes() { saveJSONSafe(CODES_FILE, codes); }
 function saveOrders() { saveJSONSafe(ORDERS_FILE, orders); }
 
-function saveUsers() {
-  // 1) يحفظ محلياً (users.json)
-  saveJSONSafe(USERS_FILE, users);
 
-  // 2) (اختياري) يزامن "النقاط فقط" إلى MongoDB إذا متصل
-  if (!db) return;
-
-  const col = db.collection("users");
-
-  // مزامنة سريعة بدون ما تعلق البوت
-  for (const chatId in users) {
-    const u = users[chatId];
-    if (!u) continue;
-
-    col.updateOne(
-      { chatId: String(chatId) },
-      { $set: { chatId: String(chatId), points: Number(u.points) || 0 } },
-      { upsert: true }
-    ).catch(() => {});
-  }
-}
 
 // =====================
 // 3) USERS + STATE
