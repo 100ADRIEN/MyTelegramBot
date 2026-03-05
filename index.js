@@ -281,6 +281,28 @@ let codes = loadJSONSafe(CODES_FILE, {
 function saveCodes() { saveJSONSafe(CODES_FILE, codes); }
 function saveOrders() { saveJSONSafe(ORDERS_FILE, orders); }
 
+function saveUsers() {
+  // 1) يحفظ محلياً (users.json)
+  saveJSONSafe(USERS_FILE, users);
+
+  // 2) (اختياري) يزامن "النقاط فقط" إلى MongoDB إذا متصل
+  if (!db) return;
+
+  const col = db.collection("users");
+
+  // مزامنة سريعة بدون ما تعلق البوت
+  for (const chatId in users) {
+    const u = users[chatId];
+    if (!u) continue;
+
+    col.updateOne(
+      { chatId: String(chatId) },
+      { $set: { chatId: String(chatId), points: Number(u.points) || 0 } },
+      { upsert: true }
+    ).catch(() => {});
+  }
+}
+
 // =====================
 // 3) USERS + STATE
 // =====================
