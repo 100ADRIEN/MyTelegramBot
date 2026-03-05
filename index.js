@@ -53,7 +53,7 @@ setTimeout(async () => {
 
 
 // ⚠️ حط توكنك هنا
-const BOT_TOKEN = "8180003779:AAEV56m-bYGKniVpRyHf4nseael60FWYn64";
+const BOT_TOKEN = "7976169299:AAETNdgYqS84r2wr9StV9oWVfxYkivFp7zs";
 if (!BOT_TOKEN || BOT_TOKEN === "PUT_YOUR_BOT_TOKEN_HERE") {
   throw new Error("BOT_TOKEN is missing. Put your token in BOT_TOKEN.");
 }
