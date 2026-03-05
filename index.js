@@ -37,24 +37,26 @@ async function connectMongo() {
 }
 connectMongo();
 // بعد الاتصال، اسحب بيانات المستخدمين من Mongo واعتبرها المصدر الحقيقي
-setTimeout(async () => {
+async function connectMongo() {
   try {
-    if (!db) return;
+    await mongoClient.connect();
+    db = mongoClient.db("anime_shadow_bot");
+    console.log("✅ MongoDB Connected");
 
+    // ✅ بعد الاتصال مباشرة اسحب المستخدمين من Mongo
     const mongoUsers = await loadUsersFromMongo();
 
-    // دمج: Mongo يغلب json
+    // ✅ دمج: Mongo يغلب json
     users = { ...users, ...mongoUsers };
 
-    // احفظ نسخة محلية حتى تبقى متوافقة
+    // ✅ احفظ محلياً (اختياري)
     saveUsers();
 
     console.log("✅ users loaded from MongoDB:", Object.keys(users).length);
-  } catch (e) {
-    console.log("❌ loadUsersFromMongo error:", e?.message || e);
+  } catch (err) {
+    console.log("❌ MongoDB Error:", err?.message || err);
   }
-}, 2500);
-
+}
 
 // ⚠️ حط توكنك هنا
 const BOT_TOKEN = "7976169299:AAETNdgYqS84r2wr9StV9oWVfxYkivFp7zs";
