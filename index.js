@@ -35,21 +35,24 @@ async function connectMongo() {
   }
 }
 connectMongo();
+// بعد الاتصال، اسحب بيانات المستخدمين من Mongo واعتبرها المصدر الحقيقي
 setTimeout(async () => {
   try {
-    const col = db.collection("users");
+    if (!db) return;
 
-    await col.insertOne({
-      name: "test user",
-      points: 100,
-      time: new Date().toISOString()
-    });
+    const mongoUsers = await loadUsersFromMongo();
 
-    console.log("✅ data inserted to MongoDB");
-  } catch (err) {
-    console.log("❌ error:", err);
+    // دمج: Mongo يغلب json
+    users = { ...users, ...mongoUsers };
+
+    // احفظ نسخة محلية حتى تبقى متوافقة
+    saveUsers();
+
+    console.log("✅ users loaded from MongoDB:", Object.keys(users).length);
+  } catch (e) {
+    console.log("❌ loadUsersFromMongo error:", e?.message || e);
   }
-}, 3000);
+}, 2500);
 
 
 // ⚠️ حط توكنك هنا
@@ -165,6 +168,7 @@ const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
 // =====================
 // 2) HELPERS: load/save
 // =====================
+
 function loadJSONSafe(file, fallback) {
   const bak = file + ".bak";
   try {
@@ -175,6 +179,55 @@ function loadJSONSafe(file, fallback) {
   } catch (e) {
     console.error("loadJSONSafe main failed:", file, e);
   }
+
+  // =====================
+// ✅ Mongo Users Persist (الحل النهائي للنقاط)
+// =====================
+let saveUsersTimer = null;
+
+async function loadUsersFromMongo() {
+  if (!db) return {};
+  const col = db.collection("users");
+  const docs = await col.find({}).toArray();
+
+  const map = {};
+  for (const d of docs) {
+    const { _id, chatId, ...rest } = d;
+    if (!chatId) continue;
+    map[String(chatId)] = rest;
+  }
+  return map;
+}
+
+async function flushUsersToMongo() {
+  if (!db) return;
+  const col = db.collection("users");
+
+  const entries = Object.entries(users || {});
+  if (!entries.length) return;
+
+  const ops = entries.map(([chatId, u]) => ({
+    updateOne: {
+      filter: { chatId: String(chatId) },
+      update: { $set: { chatId: String(chatId), ...u } },
+      upsert: true,
+    }
+  }));
+
+  await col.bulkWrite(ops, { ordered: false });
+}
+
+function saveUsers() {
+  // 1) احفظ محلي (اختياري)
+  saveUsers();
+
+  // 2) احفظ على Mongo (هو الأهم)
+  if (!db) return;
+  clearTimeout(saveUsersTimer);
+  saveUsersTimer = setTimeout(() => {
+    flushUsersToMongo().catch(() => {});
+  }, 400);
+}
 
   // جرّب نسخة احتياطية
   try {
@@ -205,29 +258,11 @@ function saveJSONSafe(file, data) {
 
     // بدّل بشكل آمن
     fs.renameSync(tmp, file);
-
-    // ✅ مزامنة "النقاط فقط" إلى MongoDB (لازم هنا داخل try)
-    if (db && file === USERS_FILE) {
-      const col = db.collection("users");
-
-      for (const chatId in data) {
-        const u = data[chatId];
-        if (!u) continue;
-
-        col.updateOne(
-          { chatId: String(chatId) },
-          { $set: { chatId: String(chatId), points: Number(u.points) || 0 } },
-          { upsert: true }
-        ).catch(() => {});
-      }
-    }
-
   } catch (e) {
     console.error("saveJSONSafe error:", file, e);
     try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
   }
 }
-
 
 
 function normalizeText(s) {
@@ -263,7 +298,7 @@ function ensureUser(chatId) {
       lastSeen: new Date().toISOString(),
       state: { page: "HOME", lastMsgId: null, tmp: {} },
     };
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return users[chatId];
   }
 
@@ -279,14 +314,14 @@ function ensureUser(chatId) {
   if (!u.createdAt) u.createdAt = new Date().toISOString();
   if (!u.lastSeen) u.lastSeen = new Date().toISOString();
 
-  saveJSONSafe(USERS_FILE, users);
+  saveUsers();
   return u;
 }
 
 function setLastMessage(chatId, messageId) {
   const u = ensureUser(chatId);
   u.state.lastMsgId = messageId;
-  saveJSONSafe(USERS_FILE, users);
+  saveUsers();
 }
 
 function getLastMessage(chatId) {
@@ -296,7 +331,7 @@ function getLastMessage(chatId) {
 function setPage(chatId, page) {
   const u = ensureUser(chatId);
   u.state.page = page;
-  saveJSONSafe(USERS_FILE, users);
+  saveUsers();
 }
 
 // =====================
@@ -648,7 +683,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
         const joined = await isJoinedChannel(msg.from.id);
         if (!joined) {
-          saveJSONSafe(USERS_FILE, users);
+          saveUsers();
           bot.sendMessage(chatId, "❌ حتى تنحسب الإحالة لازم تشترك بالقناة أولاً.").catch(() => {});
           await showHome(chatId);
           return;
@@ -656,7 +691,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
 
         const suspicious = markAndCheckReferrerSuspicious(refChatId);
         if (suspicious) {
-          saveJSONSafe(USERS_FILE, users);
+          saveUsers();
 
           bot.sendMessage(
             refChatId,
@@ -671,7 +706,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
         users[refChatId].referrals = users[refChatId].referrals || [];
         users[refChatId].referrals.push(chatId);
 
-        saveJSONSafe(USERS_FILE, users);
+        saveUsers();
 
         bot.sendMessage(
           refChatId,
@@ -681,7 +716,7 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     }
   }
 
-  saveJSONSafe(USERS_FILE, users);
+  saveUsers();
   await showHome(chatId);
 });
 
@@ -732,19 +767,19 @@ bot.on("callback_query", async (q) => {
 
     if (action === "LOCKED_GATE") {
       u.state.tmp.locked = { step: "WAIT_ID", flow: {} };
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "🚫 بوابة محظورة\n\n🔢 اكتب الايدي مالك:");
     }
 
     if (action === "CODE") {
       u.state.tmp.useCode = { step: "WAIT_CODE" };
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "🔑 اكتب الكود:");
     }
 
     if (action === "SHARE_POINTS") {
       u.state.tmp.share = { step: "WAIT_FRIEND_ID" };
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "🔢 أدخل ID صديقك لمشاركة النقاط:");
     }
 
@@ -755,7 +790,7 @@ bot.on("callback_query", async (q) => {
       if (!lastGiftTime || now.diff(lastGiftTime, "hours") >= 24) {
         u.points += 10;
         u.lastGift = now.toISOString();
-        saveJSONSafe(USERS_FILE, users);
+        saveUsers();
         return editOrSend(chatId, "🎁 حصلت على 10 نقاط كمكافأة يومية!", backToHomeKeyboard());
       }
       return editOrSend(chatId, "⏳ يمكنك استلام الهدية بعد 24 ساعة.", backToHomeKeyboard());
@@ -774,7 +809,7 @@ bot.on("callback_query", async (q) => {
         const uu = ensureUser(chatId);
         uu.points += CHANNEL_JOIN_POINTS;
         uu.joinedChannels.push(available[0].link);
-        saveJSONSafe(USERS_FILE, users);
+        saveUsers();
         bot.sendMessage(chatId, `✅ حصلت على ${CHANNEL_JOIN_POINTS} نقاط!`);
       }, 5000);
 
@@ -784,7 +819,7 @@ bot.on("callback_query", async (q) => {
     if (action === "MAKE_POINTS_CODE") {
       if (!isAdmin(chatId)) return;
       u.state.tmp.admin = { step: "WAIT_POINTS_EACH" };
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "✍️ اكتب عدد النقاط لكل شخص (مثلاً 10):");
     }
 
@@ -866,7 +901,7 @@ bot.on("callback_query", async (q) => {
 
     u.state.tmp.locked.flow.maxUses = maxUses;
     u.state.tmp.locked.step = "READY_CREATE";
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     const flow = u.state.tmp.locked.flow;
     return editOrSend(
@@ -899,11 +934,11 @@ bot.on("callback_query", async (q) => {
 
     codes[code] = { points, usedBy: [], maxUses, createdBy: u.uid, createdAt: new Date().toISOString() };
 
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     saveCodes();
 
     u.state.tmp.locked = null;
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     return editOrSend(
       chatId,
@@ -971,7 +1006,7 @@ bot.on("message", async (msg) => {
 
   u.lastSeen = new Date().toISOString();
   u.isActive = true;
-  saveJSONSafe(USERS_FILE, users);
+  saveUsers();
 
   if (text === SECRET_OPEN) {
     if (!isAdmin(chatId)) return;
@@ -1008,7 +1043,7 @@ bot.on("message", async (msg) => {
       }
       u.points -= pending.cost;
       deducted = pending.cost;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
     }
 
     orders.push(order);
@@ -1041,7 +1076,7 @@ bot.on("message", async (msg) => {
 
       if (order.status === "FAILED" && deducted > 0) {
         u.points += deducted;
-        saveJSONSafe(USERS_FILE, users);
+        saveUsers();
       }
 
       saveOrders();
@@ -1051,7 +1086,7 @@ bot.on("message", async (msg) => {
 
       if (deducted > 0) {
         u.points += deducted;
-        saveJSONSafe(USERS_FILE, users);
+        saveUsers();
       }
 
       saveOrders();
@@ -1077,22 +1112,22 @@ bot.on("message", async (msg) => {
   if (u.state?.tmp?.locked?.step === "WAIT_ID") {
     if (text !== u.uid) {
       u.state.tmp.locked = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ الايدي غير صحيح. ارجع اضغط زر البوابة من جديد.");
     }
     u.state.tmp.locked.step = "WAIT_PASS";
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return bot.sendMessage(chatId, "✅ تم التحقق من الايدي.\n\n🔐 اكتب كلمة السر:");
   }
 
   if (u.state?.tmp?.locked?.step === "WAIT_PASS") {
     if (text !== LOCKED_PASSWORD) {
       u.state.tmp.locked = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ كلمة السر غير صحيحة.");
     }
     u.state.tmp.locked = { step: "WAIT_CODE", flow: {} };
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return bot.sendMessage(chatId, "✅ تم فتح البوابة.\n\n✍️ اكتب الكود اللي تريد تنشئه:");
   }
 
@@ -1102,7 +1137,7 @@ bot.on("message", async (msg) => {
     if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا. اكتب كود غيره.");
     u.state.tmp.locked.flow = { code };
     u.state.tmp.locked.step = "WAIT_POINTS";
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return bot.sendMessage(chatId, "⭐️ اكتب كم نقطة يحصلون من هذا الكود؟ (مثلاً 10):");
   }
 
@@ -1113,7 +1148,7 @@ bot.on("message", async (msg) => {
     }
     u.state.tmp.locked.flow.points = points;
     u.state.tmp.locked.step = "WAIT_MAX_CHOICE";
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return editOrSend(chatId, "👥 اختر عدد الناس اللي يستخدمون الكود (1/2/3/4) أو تخطي:", maxUsesKeyboardLocked());
   }
 
@@ -1124,7 +1159,7 @@ bot.on("message", async (msg) => {
 
     if (!codeData) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ كود غير صحيح أو انتهت صلاحيته.");
     }
 
@@ -1132,18 +1167,18 @@ bot.on("message", async (msg) => {
 
     if (codeData.usedBy.includes(String(chatId))) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ انت مستخدم هذا الكود من قبل.");
     }
 
     if (codeData.usedBy.length >= codeData.maxUses) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته.");
     }
 
     u.state.tmp.useCode = { step: "WAIT_ID", code };
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return bot.sendMessage(chatId, "🔢 اكتب ID مالك حتى تستلم النقاط:");
   }
 
@@ -1153,13 +1188,13 @@ bot.on("message", async (msg) => {
 
     if (!codeData) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ الكود غير موجود أو انتهى.");
     }
 
     if (text !== u.uid) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ الـ ID اللي كتبته مو مالك.");
     }
 
@@ -1167,13 +1202,13 @@ bot.on("message", async (msg) => {
 
     if (codeData.usedBy.includes(String(chatId))) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ انت مستخدم هذا الكود من قبل.");
     }
 
     if (codeData.usedBy.length >= codeData.maxUses) {
       u.state.tmp.useCode = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته.");
     }
 
@@ -1184,11 +1219,11 @@ bot.on("message", async (msg) => {
       delete codes[code];
     }
 
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     saveCodes();
 
     u.state.tmp.useCode = null;
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     return bot.sendMessage(chatId, `✅ تم إضافة ${codeData.points} نقطة إلى حسابك.\n💎 رصيدك الحالي: ${u.points}`);
   }
@@ -1198,7 +1233,7 @@ bot.on("message", async (msg) => {
     const friendUid = text;
     u.state.tmp.share.friendUid = friendUid;
     u.state.tmp.share.step = "WAIT_AMOUNT";
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return bot.sendMessage(chatId, "💰 أدخل عدد النقاط التي تريد إرسالها:");
   }
 
@@ -1212,16 +1247,16 @@ bot.on("message", async (msg) => {
     const friendChatId = Object.keys(users).find(cid => users[cid]?.uid === friendUid);
     if (!friendChatId) {
       u.state.tmp.share = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ لم يتم العثور على هذا المستخدم.");
     }
 
     u.points -= amount;
     users[friendChatId].points += amount;
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     u.state.tmp.share = null;
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     bot.sendMessage(chatId, `✅ تم إرسال ${amount} نقطة إلى ID: ${friendUid}`);
     bot.sendMessage(friendChatId, `🎉 وصلك ${amount} نقطة من مستخدم آخر!`);
@@ -1233,11 +1268,11 @@ bot.on("message", async (msg) => {
     const pointsEach = parseInt(text, 10);
     if (!Number.isFinite(pointsEach) || pointsEach <= 0) {
       u.state.tmp.admin = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
     }
     u.state.tmp.admin = { step: "WAIT_MAX_USES", pointsEach };
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
     return bot.sendMessage(chatId, "👥 اكتب عدد الأشخاص اللي يقدرون يستخدمون الكود (مثلاً 4):");
   }
 
@@ -1247,19 +1282,19 @@ bot.on("message", async (msg) => {
 
     if (!Number.isFinite(maxUses) || maxUses <= 0) {
       u.state.tmp.admin = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
     }
 
     const totalCost = pointsEach * maxUses;
     if (u.points < totalCost) {
       u.state.tmp.admin = null;
-      saveJSONSafe(USERS_FILE, users);
+      saveUsers();
       return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💸 الكلفة: ${totalCost}\n💎 رصيدك: ${u.points}`);
     }
 
     u.points -= totalCost;
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     let code = genCode(10);
     while (codes[code]) code = genCode(10);
@@ -1269,7 +1304,7 @@ bot.on("message", async (msg) => {
     saveCodes();
 
     u.state.tmp.admin = null;
-    saveJSONSafe(USERS_FILE, users);
+    saveUsers();
 
     return bot.sendMessage(
       chatId,
@@ -1285,7 +1320,7 @@ bot.on("message", async (msg) => {
 function gracefulExit(signal) {
   console.log(`\n🛑 ${signal}: saving...`);
 
-  try { saveJSONSafe(USERS_FILE, users); } catch (_) {}
+  try { saveUsers(); } catch (_) {}
   try { saveJSONSafe(CODES_FILE, codes); } catch (_) {}
   try { saveJSONSafe(ORDERS_FILE, orders); } catch (_) {}
 
