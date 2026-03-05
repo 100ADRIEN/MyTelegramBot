@@ -205,11 +205,30 @@ function saveJSONSafe(file, data) {
 
     // بدّل بشكل آمن
     fs.renameSync(tmp, file);
+
+    // ✅ مزامنة "النقاط فقط" إلى MongoDB (لازم هنا داخل try)
+    if (db && file === USERS_FILE) {
+      const col = db.collection("users");
+
+      for (const chatId in data) {
+        const u = data[chatId];
+        if (!u) continue;
+
+        col.updateOne(
+          { chatId: String(chatId) },
+          { $set: { chatId: String(chatId), points: Number(u.points) || 0 } },
+          { upsert: true }
+        ).catch(() => {});
+      }
+    }
+
   } catch (e) {
     console.error("saveJSONSafe error:", file, e);
     try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
   }
 }
+
+
 
 function normalizeText(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
