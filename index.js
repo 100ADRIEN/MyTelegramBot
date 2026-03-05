@@ -1,169 +1,238 @@
 "use strict";
 
-require("dotenv").config();
-
 const TelegramBot = require("node-telegram-bot-api");
+const fs = require("fs");
+const path = require("path");
 const axios = require("axios");
 const qs = require("qs");
 const moment = require("moment");
-const path = require("path");
-const fs = require("fs");
+const { MongoClient } = require("mongodb");
 
-const admin = require("firebase-admin");
+// =====================
+// 1) CONFIG
+// =====================
 
-// =========================================================
-// 1) CONFIG (ENV)
-// =========================================================
-const BOT_TOKEN ="7976169299:AAETNdgYqS84r2wr9StV9oWVfxYkivFp7zs";
-if (!BOT_TOKEN) throw new Error("BOT_TOKEN missing in .env");
+// ===== MongoDB Connection =====
+// 🔴 حط رابطك هنا (من Atlas > Connect > Drivers)
+// مثال: mongodb+srv://animebot:PASSWORD@cluster0....mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+const MONGO_URI = "mongodb+srv://ppuki162_db_user:9FjRUKatWMrM4nZA@cluster0.bicecd4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
-const API_URL ="https://smmlox.com/api/v2";
-const API_KEY ="cbfc807f1983d1ee38283a3c19219a9b";
-if (!API_KEY) throw new Error("API_KEY missing in .env");
+// ✅ إعدادات اتصال أقوى (أفضل من مشاكل TLS)
+const mongoClient = new MongoClient(MONGO_URI, {
+  tls: true,
+  serverSelectionTimeoutMS: 15000,
+});
 
-const ADMIN_CHAT_ID = String(process.env.ADMIN_CHAT_ID || "");
-const BOT_USERNAME = process.env.BOT_USERNAME || "BlueMoonBot_2025Bot";
-const BOT_CHANNEL = process.env.BOT_CHANNEL || "@balul344";
+let db;
 
-// زر المشرف + كلمة المرور
-const LOCKED_BTN_TEXT = "🚫 المشرف";
-const LOCKED_PASSWORD = "QWERTYASDFG123##123Q2002#2004####123456789010#2026ًُ";
-const CREATE_CODE_COST = 10000;
-const DEFAULT_MAX_USES = 4;
+async function connectMongo() {
+  try {
+    await mongoClient.connect();
+    db = mongoClient.db("anime_shadow_bot");
+    console.log("✅ MongoDB Connected");
+  } catch (err) {
+    console.log("❌ MongoDB Error:", err?.message || err);
+  }
+}
+connectMongo();
+setTimeout(async () => {
+  try {
+    const col = db.collection("users");
 
-// نقاط الإحالة + نقاط الاشتراك بالقنوات
-const REFERRAL_BONUS = 30;
-const CHANNEL_JOIN_POINTS = 5;
+    await col.insertOne({
+      name: "test user",
+      points: 100,
+      time: new Date().toISOString()
+    });
 
-// قنوات التجميع
+    console.log("✅ data inserted to MongoDB");
+  } catch (err) {
+    console.log("❌ error:", err);
+  }
+}, 3000);
+
+
+// ⚠️ حط توكنك هنا
+const BOT_TOKEN = "8180003779:AAEV56m-bYGKniVpRyHf4nseael60FWYn64";
+if (!BOT_TOKEN || BOT_TOKEN === "PUT_YOUR_BOT_TOKEN_HERE") {
+  throw new Error("BOT_TOKEN is missing. Put your token in BOT_TOKEN.");
+}
+
+const bot = new TelegramBot(BOT_TOKEN, { polling: true });
+
+const USERS_FILE = path.join(__dirname, "users.json");
+const PENDING_FILE = path.join(__dirname, "pendingOrders.json");
+const CODES_FILE = path.join(__dirname, "codes.json");
+const ORDERS_FILE = path.join(__dirname, "orders.json");
+
+// =====================
+// ✅ SMMLOX API (مباشر)
+// =====================
+const API_URL = "https://smmlox.com/api/v2";
+const API_KEY = "cbfc807f1983d1ee38283a3c19219a9b"; // 🔑 مفتاحك
+
+// ✅ قنوات الاشتراك (اختياري)
 const channels = [
   { name: "📢 قناة الأخبار", link: "https://t.me/balul344" },
   { name: "📢 قناة العروض", link: "https://t.me/balul344" },
 ];
 
-// =========================================================
-// 2) FIREBASE INIT (RTDB)
-// =========================================================
-const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL;
-if (!FIREBASE_DB_URL) throw new Error("FIREBASE_DB_URL missing in .env");
+// نقاط الإحالة
+const REFERRAL_BONUS = 30;
 
-function initFirebase() {
-  if (admin.apps.length) return;
+// نقاط الاشتراك بالقنوات
+const CHANNEL_JOIN_POINTS = 5;
 
-  const saPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+// =====================
+// ✅ أرقام الخدمات (Service IDs)
+// =====================
 
-  if (saPath && fs.existsSync(saPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(saPath, "utf8"));
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      databaseURL: FIREBASE_DB_URL,
-    });
-    return;
-  }
-
-  throw new Error(
-    "Firebase service account not found. Set FIREBASE_SERVICE_ACCOUNT_PATH to your JSON file path."
-  );
-}
-
-initFirebase();
-const db = admin.database();
-
-// مسارات بالداتابيس
-const refUsers = db.ref("users");                 // users/{chatId}
-const refCodes = db.ref("codes");                 // codes/{code}
-const refPending = db.ref("pendingOrders");       // pendingOrders/{chatId}
-const refOrders = db.ref("orders");               // orders/{orderId}
-
-// =========================================================
-// 3) BOT INIT
-// =========================================================
-const bot = new TelegramBot(BOT_TOKEN, { polling: true });
-
-// =========================================================
-// 4) SERVICES IDs + PRICES (مثل كودك)
-// =========================================================
+// 🎬 تيك توك
 const SERVICE_ID = 10880; // ❤️ لايكات تيك توك
 const VIEWS_SERVICE_ID = 5202; // 👁 مشاهدات تيك توك
-const IG_SHARES_SERVICE_ID = 10901; // 🔁 مشاركات انستقرام
-const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 ستوري فيسبوك
+// 🎁 خدمات مجانية إضافية
+const IG_REELS_FREE_VIEWS_SERVICE_ID = 10870; // 🎁 ريلز انستقرام مجاني
+const TG_POST_FREE_VIEWS_SERVICE_ID = 10871; // 🎁 مشاهدات بوست تلجرام مجانية
+const TWITTER_FREE_VIEWS_SERVICE_ID = 10872; // 🎁 مشاهدات تغريدة تويتر مجانية
+const TG_POST_REACTIONS_FREE_SERVICE_ID = 10913; // 🎁 تفاعل بوست تلجرام ايموجي
 const TIKTOK_FREE_VIEWS_SERVICE_ID = 10869; // 🎁 مشاهدات تيك توك مجانية
-const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام
-const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
 const TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID = 10932; // 👥 متابعين تيك توك (مدى الحياة)
+const TIKTOK_LIKES_SERVICE_ID = 10927; // ❤️ اعجابات تيك توك (اضافة جديدة)
+
+// 📸 انستقرام
+const IG_LIKES_SERVICE_ID = 10641; // ❤️ لايكات انستقرام
+const IG_SHARES_SERVICE_ID = 10901; // 🔁 مشاركات انستقرام
+const IG_COMMENTS_SERVICE_ID = 5431; // 💬 تعليقات عشوائية انستقرام
 const IG_FOLLOWERS_LIFETIME_SERVICE_ID = 10945; // 👥 متابعين انستقرام (مدى الحياة)
 
+// ▶️ يوتيوب
+const YOUTUBE_LIKES_SERVICE_ID = 10943; // 👍 اعجابات يوتيوب
+
+// 👍 فيسبوك
+const FB_STORY_VIEWS_SERVICE_ID = 9191; // 👁 ستوري فيسبوك
+const FB_REACTIONS_HEART_SERVICE_ID = 9037; // ❤️ تفاعلات قلب
+const FB_FOLLOWERS_LIFETIME_SERVICE_ID = 5574; // 👥 متابعين فيسبوك (مدى الحياة)
+
+// 📡 تيليجرام
+const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
+const TELEGRAM_PREMIUM_VIEWS_SERVICE_ID = 10908; // 🌟 مشاهدات مميزة بريميوم
+
 const ORDER_TYPE_TO_SERVICE_ID = {
+  // تيك توك
   ttlikes: SERVICE_ID,
   ttviews: VIEWS_SERVICE_ID,
   freeviews: TIKTOK_FREE_VIEWS_SERVICE_ID,
+  ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
+  ttlikes_new: TIKTOK_LIKES_SERVICE_ID,
+
+  // 🎁 خدمات مجانية
+  igfreeviews: IG_REELS_FREE_VIEWS_SERVICE_ID,
+  tgpostfreeviews: TG_POST_FREE_VIEWS_SERVICE_ID,
+  twitterfreeviews: TWITTER_FREE_VIEWS_SERVICE_ID,
+  tgpostreactions: TG_POST_REACTIONS_FREE_SERVICE_ID,
+
+  // انستقرام
   iglikes: IG_LIKES_SERVICE_ID,
   igshares: IG_SHARES_SERVICE_ID,
-  fbstory: FB_STORY_VIEWS_SERVICE_ID,
-  tgfollowers: TELEGRAM_FOLLOWERS_SERVICE_ID,
-  ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
+  igcomments: IG_COMMENTS_SERVICE_ID,
   igfollowers: IG_FOLLOWERS_LIFETIME_SERVICE_ID,
+
+  // يوتيوب
+  youtubelikes: YOUTUBE_LIKES_SERVICE_ID,
+
+  // فيسبوك
+  fbstory: FB_STORY_VIEWS_SERVICE_ID,
+  fbreactions: FB_REACTIONS_HEART_SERVICE_ID,
+  fbfollowers: FB_FOLLOWERS_LIFETIME_SERVICE_ID,
+
+  // تيليجرام
+  tgfollowers: TELEGRAM_FOLLOWERS_SERVICE_ID,
+  tgpremiumviews: TELEGRAM_PREMIUM_VIEWS_SERVICE_ID,
 };
 
-const ttLikePrices = { 10: 5, 20: 10, 30: 20, 40: 30, 50: 40, 60: 50, 70: 60, 80: 70, 90: 80, 100: 90, 120: 100 };
-const ttViewPrices = { 500: 50, 1000: 100, 1500: 150, 3000: 200 };
-const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
-const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
-const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
-const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
-const ttFollowersPrices = { 500: 5000, 1000: 10000, 30: 2000 };
-const igFollowersPrices = { 10: 500, 30: 1000, 100: 3000, 500: 5000, 1000: 10000 };
+// =====================
+// ✅ بوابة إنشاء الأكواد (زر ظاهر)
+// =====================
+const LOCKED_BTN_TEXT = "🚫 المشرف";
+const LOCKED_PASSWORD = "PUT_YOUR_LOCKED_PASSWORD_HERE"; // غيرها
+const CREATE_CODE_COST = 10000;  // كلفة الإنشاء
+const DEFAULT_MAX_USES = 4;      // إذا تخطي العدد
 
-// =========================================================
-// 5) HELPERS
-// =========================================================
+// الأدمن
+const ADMIN_CHAT_ID = "5571001437";
+const SECRET_OPEN = "/!(12345)/!?أنمي شادو افتح";
+
+// =====================
+// 2) HELPERS: load/save
+// =====================
+function loadJSONSafe(file, fallback) {
+  const bak = file + ".bak";
+  try {
+    if (fs.existsSync(file)) {
+      const raw = fs.readFileSync(file, "utf8");
+      if (raw && raw.trim().length) return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error("loadJSONSafe main failed:", file, e);
+  }
+
+  // جرّب نسخة احتياطية
+  try {
+    if (fs.existsSync(bak)) {
+      const raw = fs.readFileSync(bak, "utf8");
+      if (raw && raw.trim().length) return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.error("loadJSONSafe bak failed:", bak, e);
+  }
+
+  return fallback;
+}
+
+function saveJSONSafe(file, data) {
+  const tmp = file + ".tmp";
+  const bak = file + ".bak";
+  try {
+    const json = JSON.stringify(data, null, 2);
+
+    // اكتب ملف مؤقت
+    fs.writeFileSync(tmp, json, "utf8");
+
+    // انسخ القديم كنسخة احتياطية
+    if (fs.existsSync(file)) {
+      try { fs.copyFileSync(file, bak); } catch (_) {}
+    }
+
+    // بدّل بشكل آمن
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    console.error("saveJSONSafe error:", file, e);
+    try { if (fs.existsSync(tmp)) fs.unlinkSync(tmp); } catch (_) {}
+  }
+}
+
 function normalizeText(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
 
-function isAdmin(chatId) {
-  return ADMIN_CHAT_ID && String(chatId) === String(ADMIN_CHAT_ID);
-}
+let users = loadJSONSafe(USERS_FILE, {});
+let pendingOrders = loadJSONSafe(PENDING_FILE, {});
+let orders = loadJSONSafe(ORDERS_FILE, []);
+let codes = loadJSONSafe(CODES_FILE, {
+  k100SHYRHRHFHHDD: { points: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
+  BOT100: { points: 50, usedBy: [], maxUses: 5 },
+  Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
+});
 
-function genCode(len = 10) {
-  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
-}
+function saveCodes() { saveJSONSafe(CODES_FILE, codes); }
+function saveOrders() { saveJSONSafe(ORDERS_FILE, orders); }
 
-function genOrderId() {
-  return "ORD" + Date.now().toString(10) + Math.floor(100 + Math.random() * 900);
-}
-
-async function isJoinedChannel(userId) {
-  try {
-    const m = await bot.getChatMember(BOT_CHANNEL, userId);
-    return ["member", "administrator", "creator"].includes(m.status);
-  } catch (_) {
-    return false;
-  }
-}
-
-function makeReferralLink(u) {
-  return `https://t.me/${BOT_USERNAME}?start=ref_${u.uid}`;
-}
-
-// =========================================================
-// 6) FIREBASE DATA LAYER
-// =========================================================
-async function getUser(chatId) {
-  const snap = await refUsers.child(String(chatId)).get();
-  return snap.exists() ? snap.val() : null;
-}
-
-async function ensureUser(chatId) {
-  const cid = String(chatId);
-  const userRef = refUsers.child(cid);
-
-  const snap = await userRef.get();
-  if (!snap.exists()) {
-    const newUser = {
+// =====================
+// 3) USERS + STATE
+// =====================
+function ensureUser(chatId) {
+  if (!users[chatId]) {
+    users[chatId] = {
       uid: String(Math.floor(1000000000 + Math.random() * 9000000000)),
       points: 0,
       joinedChannels: [],
@@ -174,100 +243,54 @@ async function ensureUser(chatId) {
       createdAt: new Date().toISOString(),
       lastSeen: new Date().toISOString(),
       state: { page: "HOME", lastMsgId: null, tmp: {} },
-      refStats: { stamps: [], blockedUntil: 0 },
     };
-    await userRef.set(newUser);
-    return newUser;
+    saveJSONSafe(USERS_FILE, users);
+    return users[chatId];
   }
 
-  const u = snap.val() || {};
-  // ترقيع أي نقص
+  const u = users[chatId];
+
   if (!u.uid) u.uid = String(Math.floor(1000000000 + Math.random() * 9000000000));
   if (typeof u.points !== "number" || !Number.isFinite(u.points)) u.points = 0;
-  if (!Array.isArray(u.joinedChannels)) u.joinedChannels = [];
-  if (!Array.isArray(u.referrals)) u.referrals = [];
+  if (!u.joinedChannels) u.joinedChannels = [];
+  if (!u.referrals) u.referrals = [];
   if (!u.state) u.state = { page: "HOME", lastMsgId: null, tmp: {} };
   if (!u.state.tmp) u.state.tmp = {};
   if (typeof u.isActive !== "boolean") u.isActive = true;
   if (!u.createdAt) u.createdAt = new Date().toISOString();
   if (!u.lastSeen) u.lastSeen = new Date().toISOString();
-  if (!u.refStats) u.refStats = { stamps: [], blockedUntil: 0 };
 
-  await userRef.update(u);
+  saveJSONSafe(USERS_FILE, users);
   return u;
 }
 
-async function updateUser(chatId, patch) {
-  await refUsers.child(String(chatId)).update(patch);
-}
-
-async function setLastMessage(chatId, messageId) {
-  const u = await ensureUser(chatId);
+function setLastMessage(chatId, messageId) {
+  const u = ensureUser(chatId);
   u.state.lastMsgId = messageId;
-  await updateUser(chatId, { state: u.state });
+  saveJSONSafe(USERS_FILE, users);
 }
 
-async function getLastMessage(chatId) {
-  const u = await ensureUser(chatId);
-  return u.state?.lastMsgId || null;
+function getLastMessage(chatId) {
+  return ensureUser(chatId).state.lastMsgId;
 }
 
-async function setPage(chatId, page) {
-  const u = await ensureUser(chatId);
+function setPage(chatId, page) {
+  const u = ensureUser(chatId);
   u.state.page = page;
-  await updateUser(chatId, { state: u.state });
+  saveJSONSafe(USERS_FILE, users);
 }
 
-// Pending orders
-async function setPending(chatId, order) {
-  await refPending.child(String(chatId)).set(order);
-}
-async function getPending(chatId) {
-  const snap = await refPending.child(String(chatId)).get();
-  return snap.exists() ? snap.val() : null;
-}
-async function clearPending(chatId) {
-  await refPending.child(String(chatId)).remove();
-}
-
-// Codes
-async function getCode(code) {
-  const snap = await refCodes.child(code).get();
-  return snap.exists() ? snap.val() : null;
-}
-async function setCode(code, data) {
-  await refCodes.child(code).set(data);
-}
-async function updateCode(code, patch) {
-  await refCodes.child(code).update(patch);
-}
-
-// Orders
-async function addOrder(orderId, data) {
-  await refOrders.child(orderId).set(data);
-}
-
-// Atomic points (transaction)
-async function addPoints(chatId, amount) {
-  const pRef = refUsers.child(String(chatId)).child("points");
-  await pRef.transaction((cur) => (Number(cur || 0) + Number(amount || 0)));
-}
-async function takePoints(chatId, amount) {
-  const pRef = refUsers.child(String(chatId)).child("points");
-  const res = await pRef.transaction((cur) => {
-    const now = Number(cur || 0);
-    const cost = Number(amount || 0);
-    if (now < cost) return; // abort
-    return now - cost;
-  });
-  return res.committed;
-}
-
-// =========================================================
-// 7) SMMLOX API
-// =========================================================
+// =====================
+// 4) API: إرسال طلب مباشر لـ SMMLOX
+// =====================
 async function sendOrderDirect({ service, link, quantity }) {
-  const payload = { key: API_KEY, action: "add", service, link, quantity };
+  const payload = {
+    key: API_KEY,
+    action: "add",
+    service,
+    link,
+    quantity,
+  };
 
   const res = await axios.post(API_URL, qs.stringify(payload), {
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -277,9 +300,9 @@ async function sendOrderDirect({ service, link, quantity }) {
   return res.data;
 }
 
-// =========================================================
-// 8) UI BUILDERS
-// =========================================================
+// =====================
+// 5) UI BUILDERS
+// =====================
 function homeText(u) {
   return `مرحبًا بك في بوت تطبيق انمي شادو 👋🫂
 
@@ -321,39 +344,91 @@ function backToHomeKeyboard() {
 function servicesKeyboard() {
   return {
     inline_keyboard: [
+      // 🎬 تيك توك
       [{ text: "❤️ لايكات تيك توك", callback_data: "NAV:SVC_TT_LIKES" }],
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
       [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
+      [{ text: "🎁 مشاهدات ريلز انستقرام مجانية", callback_data: "NAV:SVC_IG_FREEVIEWS" }],
+      [{ text: "🎁 مشاهدات بوست تلجرام مجانية", callback_data: "NAV:SVC_TG_POST_FREE" }],
+      [{ text: "🎁 مشاهدات تغريدة تويتر مجانية", callback_data: "NAV:SVC_TWITTER_FREE" }],
+      [{ text: "🎁 تفاعل بوست تلجرام (ايموجي)", callback_data: "NAV:SVC_TG_REACTIONS_FREE" }],
+      [{ text: "❤️ اعجابات تيك توك (جديدة)", callback_data: "NAV:SVC_TT_LIKES_NEW" }],
+
+      // 📸 انستقرام
       [{ text: "👥 متابعين إنستقرام (مدى الحياة)", callback_data: "NAV:SVC_IG_FOLLOWERS" }],
       [{ text: "❤️ اعجابات إنستقرام", callback_data: "NAV:SVC_IG_LIKES" }],
       [{ text: "🔁 مشاركات إنستقرام", callback_data: "NAV:SVC_IG_SHARES" }],
+      [{ text: "💬 تعليقات عشوائية إنستقرام", callback_data: "NAV:SVC_IG_COMMENTS" }],
+
+      // ▶️ يوتيوب
+      [{ text: "👍 اعجابات يوتيوب", callback_data: "NAV:SVC_YT_LIKES" }],
+
+      // 📘 فيسبوك
       [{ text: "📘 مشاهدات ستوري فيسبوك", callback_data: "NAV:SVC_FB_STORY" }],
+      [{ text: "❤️ تفاعلات قلب فيسبوك", callback_data: "NAV:SVC_FB_REACTIONS" }],
+      [{ text: "👥 متابعين فيسبوك (مدى الحياة)", callback_data: "NAV:SVC_FB_FOLLOWERS" }],
+
+      // 📡 تيليجرام
+      [{ text: "👥 متابعين تيليجرام", callback_data: "NAV:SVC_TG_FOLLOWERS" }],
+      [{ text: "🌟 مشاهدات تيليجرام بريميوم", callback_data: "NAV:SVC_TG_PREMIUM_VIEWS" }],
+
+      // 🔙 رجوع
       [{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }],
     ],
   };
 }
 
-function buildQtyKeyboard(prefix, priceMap, backTo = "NAV:SERVICES") {
-  const qtyList = Object.keys(priceMap)
-    .map((k) => parseInt(k, 10))
-    .sort((a, b) => a - b)
-    .map((qty) => ({ qty, label: `${qty} - ${priceMap[qty]} عملة` }));
+function maxUsesKeyboardLocked() {
+  return {
+    inline_keyboard: [
+      [
+        { text: "1", callback_data: "LOCKED_MAX:1" },
+        { text: "2", callback_data: "LOCKED_MAX:2" },
+        { text: "3", callback_data: "LOCKED_MAX:3" },
+        { text: "4", callback_data: "LOCKED_MAX:4" },
+      ],
+      [{ text: "⏭ تخطي", callback_data: "LOCKED_MAX:SKIP" }],
+      [{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }],
+    ],
+  };
+}
 
-  const rows = [];
-  for (let i = 0; i < qtyList.length; i += 2) {
-    const a = qtyList[i];
-    const b = qtyList[i + 1];
-    const row = [{ text: a.label, callback_data: `${prefix}:${a.qty}` }];
-    if (b) row.push({ text: b.label, callback_data: `${prefix}:${b.qty}` });
-    rows.push(row);
+function createLockedKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: `✅ إنشاء (${CREATE_CODE_COST})`, callback_data: "LOCKED_CREATE:DO" }],
+      [{ text: "⬅️ رجوع إلى الاقسام", callback_data: "NAV:HOME" }],
+    ],
+  };
+}
+
+// =====================
+// 6) EDIT / SEND SAFE
+// =====================
+async function showHome(chatId) {
+  const u = ensureUser(chatId);
+  setPage(chatId, "HOME");
+
+  const lastMsgId = getLastMessage(chatId);
+
+  if (lastMsgId) {
+    try {
+      await bot.editMessageText(homeText(u), {
+        chat_id: chatId,
+        message_id: lastMsgId,
+        reply_markup: homeKeyboard(),
+      });
+      return;
+    } catch (_) {}
   }
-  rows.push([{ text: "⬅️ رجوع", callback_data: backTo }]);
-  return { inline_keyboard: rows };
+
+  const sent = await bot.sendMessage(chatId, homeText(u), { reply_markup: homeKeyboard() });
+  setLastMessage(chatId, sent.message_id);
 }
 
 async function editOrSend(chatId, text, keyboard) {
-  const lastMsgId = await getLastMessage(chatId);
+  const lastMsgId = getLastMessage(chatId);
 
   if (lastMsgId) {
     try {
@@ -367,113 +442,219 @@ async function editOrSend(chatId, text, keyboard) {
   }
 
   const sent = await bot.sendMessage(chatId, text, { reply_markup: keyboard });
-  await setLastMessage(chatId, sent.message_id);
+  setLastMessage(chatId, sent.message_id);
 }
 
-async function showHome(chatId) {
-  const u = await ensureUser(chatId);
-  await setPage(chatId, "HOME");
-  await editOrSend(chatId, homeText(u), homeKeyboard());
+// =====================
+// 7) REFERRAL
+// =====================
+function makeReferralLink(u) {
+  const botUsername = "BlueMoonBot_2025Bot"; // غيره ليوزر بوتك الحقيقي
+  return `https://t.me/${botUsername}?start=ref_${u.uid}`;
 }
 
+// =====================
+// 8) SERVICES PRICES
+// =====================
+const ttLikePrices = { 10: 5, 20: 10, 30: 20, 40: 30, 50: 40, 60: 50, 70: 60, 80: 70, 90: 80, 100: 90, 120: 100 };
+const ttViewPrices = { 500: 50, 1000: 100, 1500: 150, 3000: 200 };
+const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
+const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
+const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
+const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
+const ttFollowersPrices = { 500: 5000, 1000: 10000, 30: 2000 }; // مثال (غيرها حسب سعر نقاطك)
+const igFollowersPrices = { 10: 1500, 100: 3000, 1000: 15000, 10000: 49000 };
+
+// 🎬 تيك توك (اعجابات جديدة)
+const ttLikesNewPrices = { 10: 90, 100: 400, 500: 900, 1000: 1450, 10000: 8000 };
+
+// 📸 انستقرام (تعليقات عشوائية)
+const igCommentsPrices = { 10: 500, 100: 1200, 1000: 26000, 10000: 55000 };
+
+// ▶️ يوتيوب (اعجابات)
+const youtubeLikesPrices = { 100: 700, 500: 1500, 1000: 2200, 10000: 9700, 20000: 19000 };
+
+// 📘 فيسبوك (تفاعلات قلب)
+const fbReactionsPrices = { 10: 60, 20: 90, 50: 190, 100: 290, 1000: 1280, 5000: 4080, 10000: 19000, 50000: 45000 };
+
+// 📘 فيسبوك (متابعين مدى الحياة)
+const fbFollowersPrices = { 20: 1000, 100: 3500, 1000: 13000, 10000: 26000 };
+
+// 📡 تيليجرام (مشاهدات بريميوم)
+const tgPremiumViewsPrices = { 100: 200, 500: 400, 1000: 2200, 5000: 4000, 10000: 9000 };
+
+// =====================
+// 9) MENUS HELPERS
+// =====================
 async function showServices(chatId) {
-  await setPage(chatId, "SERVICES");
+  setPage(chatId, "SERVICES");
   await editOrSend(chatId, "🛍 خدماتي\nاختر الخدمة المطلوبة:", servicesKeyboard());
 }
 
-// referral anti-spam (نفس فكرة كودك)
-const REF_WINDOW_MS = 10 * 60 * 1000;
-const REF_MAX_IN_WINDOW = 5;
-const REF_BLOCK_MS = 60 * 60 * 1000;
+function buildQtyKeyboard(prefix, qtyList, backTo = "NAV:SERVICES") {
+  const rows = [];
+  for (let i = 0; i < qtyList.length; i += 2) {
+    const a = qtyList[i];
+    const b = qtyList[i + 1];
+    const row = [{ text: `${a.label}`, callback_data: `${prefix}:${a.qty}` }];
+    if (b) row.push({ text: `${b.label}`, callback_data: `${prefix}:${b.qty}` });
+    rows.push(row);
+  }
+  rows.push([{ text: "⬅️ رجوع", callback_data: backTo }]);
+  return { inline_keyboard: rows };
+}
 
-function nowMs() { return Date.now(); }
+async function showQtyMenu(chatId, title, prefix, priceMap, backTo) {
+  const qtyList = Object.keys(priceMap)
+    .map(k => parseInt(k, 10))
+    .sort((a, b) => a - b)
+    .map(qty => ({ qty, label: `${qty} - ${priceMap[qty]} عملة` }));
 
-async function markAndCheckReferrerSuspicious(refChatId) {
-  const cid = String(refChatId);
-  const userRef = refUsers.child(cid);
+  await editOrSend(chatId, title, buildQtyKeyboard(prefix, qtyList, backTo));
+}
 
-  const snap = await userRef.get();
-  if (!snap.exists()) return true;
+// =====================
+// 10) BALANCE GUARD
+// =====================
+function requireBalanceOrWarn(chatId, user, cost) {
+  if (user.points < cost) {
+    editOrSend(chatId, `❌ رصيدك غير كافي.\n\n💰 السعر: ${cost}\n💎 رصيدك: ${user.points}`, backToHomeKeyboard());
+    return false;
+  }
+  return true;
+}
 
-  const u = snap.val();
-  u.refStats = u.refStats || { stamps: [], blockedUntil: 0 };
+// =====================
+// 11) Pending orders
+// =====================
+function setPending(chatId, order) {
+  pendingOrders[chatId] = order;
+  saveJSONSafe(PENDING_FILE, pendingOrders);
+}
 
-  const t = nowMs();
+function clearPending(chatId) {
+  delete pendingOrders[chatId];
+  saveJSONSafe(PENDING_FILE, pendingOrders);
+}
 
-  if (u.refStats.blockedUntil && u.refStats.blockedUntil > t) {
+function genOrderId() {
+  return "ORD" + Date.now().toString(10) + Math.floor(100 + Math.random() * 900);
+}
+
+// =====================
+// 12) ADMIN
+// =====================
+function isAdmin(chatId) {
+  return String(chatId) === String(ADMIN_CHAT_ID);
+}
+
+function adminKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: "🧾 كتابة كود نقاط", callback_data: "NAV:MAKE_POINTS_CODE" }],
+      [{ text: "⬅️ رجوع للأقسام", callback_data: "NAV:HOME" }],
+    ],
+  };
+}
+
+function genCode(len = 10) {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+// =====================
+// 13) /start + Anti-spam referral
+// =====================
+const BOT_CHANNEL = "@balul344"; // <-- غيّرها لقناتك
+const REF_WINDOW_MS = 10 * 60 * 1000; // 10 دقائق
+const REF_MAX_IN_WINDOW = 5;          // أكثر من 5 إحالات خلال النافذة = رشق
+const REF_BLOCK_MS = 60 * 60 * 1000;  // حظر ساعة على الإحالات
+
+function _now() { return Date.now(); }
+
+async function isJoinedChannel(userId) {
+  try {
+    const m = await bot.getChatMember(BOT_CHANNEL, userId);
+    return ["member", "administrator", "creator"].includes(m.status);
+  } catch (e) {
+    return false;
+  }
+}
+
+function markAndCheckReferrerSuspicious(refChatId) {
+  if (!users[refChatId]) return true;
+
+  users[refChatId].refStats = users[refChatId].refStats || { stamps: [], blockedUntil: 0 };
+
+  const t = _now();
+
+  if (users[refChatId].refStats.blockedUntil && users[refChatId].refStats.blockedUntil > t) {
     return true;
   }
 
-  u.refStats.stamps = (u.refStats.stamps || []).filter((s) => (t - s) <= REF_WINDOW_MS);
-  u.refStats.stamps.push(t);
+  users[refChatId].refStats.stamps = (users[refChatId].refStats.stamps || [])
+    .filter(s => (t - s) <= REF_WINDOW_MS);
 
-  if (u.refStats.stamps.length > REF_MAX_IN_WINDOW) {
-    u.refStats.blockedUntil = t + REF_BLOCK_MS;
-    await userRef.update({ refStats: u.refStats });
+  users[refChatId].refStats.stamps.push(t);
+
+  if (users[refChatId].refStats.stamps.length > REF_MAX_IN_WINDOW) {
+    users[refChatId].refStats.blockedUntil = t + REF_BLOCK_MS;
     return true;
   }
 
-  await userRef.update({ refStats: u.refStats });
   return false;
 }
-// =========================================================
-// 9) /start + referral logic (Firebase)
-// =========================================================
+
 bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
   const chatId = String(msg.chat.id);
 
-  // هل جديد؟
-  const existed = await getUser(chatId);
-  const isBrandNewUser = !existed;
+  const isBrandNewUser = !users[chatId];
+  const u = ensureUser(chatId);
 
-  const u = await ensureUser(chatId);
   u.lastSeen = new Date().toISOString();
   u.isActive = true;
 
   const payload = match && match[1] ? String(match[1]).trim() : null;
 
-  // إحالة
   if (isBrandNewUser && payload && payload.startsWith("ref_")) {
     const refUid = payload.slice(4);
 
     if (!u.referredBy && refUid && refUid !== u.uid) {
-      // نجيب صاحب uid من الداتابيس (نبحث بالusers)
-      const allUsersSnap = await refUsers.get();
-      const allUsers = allUsersSnap.exists() ? allUsersSnap.val() : {};
-
-      const refChatId = Object.keys(allUsers).find((cid) => allUsers[cid]?.uid === refUid);
+      const refChatId = Object.keys(users).find((cid) => users[cid]?.uid === refUid);
 
       if (refChatId) {
         u.referredBy = refUid;
-        await updateUser(chatId, { referredBy: refUid });
 
-        // لازم يكون مشترك بالقناة حتى تنحسب الإحالة
         const joined = await isJoinedChannel(msg.from.id);
         if (!joined) {
-          await bot.sendMessage(chatId, "❌ حتى تنحسب الإحالة لازم تشترك بالقناة أولاً.").catch(() => {});
+          saveJSONSafe(USERS_FILE, users);
+          bot.sendMessage(chatId, "❌ حتى تنحسب الإحالة لازم تشترك بالقناة أولاً.").catch(() => {});
           await showHome(chatId);
           return;
         }
 
-        // كشف رشق على المحيل
-        const suspicious = await markAndCheckReferrerSuspicious(refChatId);
+        const suspicious = markAndCheckReferrerSuspicious(refChatId);
         if (suspicious) {
-          await bot.sendMessage(
+          saveJSONSafe(USERS_FILE, users);
+
+          bot.sendMessage(
             refChatId,
             "⚠️ تم رصد نشاط إحالات غير طبيعي (رشق).\n❌ تم تعطيل نقاط الإحالة مؤقتاً."
           ).catch(() => {});
+
           await showHome(chatId);
           return;
         }
 
-        // إضافة نقاط للمحيل
-        await addPoints(refChatId, REFERRAL_BONUS);
-        const refUser = await ensureUser(refChatId);
-        refUser.referrals = Array.isArray(refUser.referrals) ? refUser.referrals : [];
-        refUser.referrals.push(chatId);
-        await updateUser(refChatId, { referrals: refUser.referrals });
+        users[refChatId].points = (users[refChatId].points || 0) + REFERRAL_BONUS;
+        users[refChatId].referrals = users[refChatId].referrals || [];
+        users[refChatId].referrals.push(chatId);
 
-        await bot.sendMessage(
+        saveJSONSafe(USERS_FILE, users);
+
+        bot.sendMessage(
           refChatId,
           `🎉 انضم عضو جديد عبر رابطك!\n✅ تمت إضافة ${REFERRAL_BONUS} نقطة لحسابك 💰`
         ).catch(() => {});
@@ -481,40 +662,34 @@ bot.onText(/^\/start(?:\s+(.+))?$/, async (msg, match) => {
     }
   }
 
-  await updateUser(chatId, { lastSeen: u.lastSeen, isActive: true });
+  saveJSONSafe(USERS_FILE, users);
   await showHome(chatId);
 });
 
-// =========================================================
-// 10) CALLBACK ROUTER
-// =========================================================
+// =====================
+// 14) CALLBACK ROUTER
+// =====================
 bot.on("callback_query", async (q) => {
-  const chatId = String(q.message.chat.id);
-  const data = q.data || "";
+  const chatId = q.message.chat.id;
+  const u = ensureUser(chatId);
 
   try { await bot.answerCallbackQuery(q.id); } catch (_) {}
 
-  const u = await ensureUser(chatId);
+  const data = q.data || "";
 
-  // ---------------- NAV ----------------
   if (data.startsWith("NAV:")) {
     const action = data.split(":")[1];
 
     if (action === "HOME") return showHome(chatId);
 
     if (action === "MEMBERS") {
-      const snap = await refUsers.get();
-      const all = snap.exists() ? Object.keys(snap.val() || {}).length : 0;
-      const active = snap.exists()
-        ? Object.values(snap.val() || {}).filter((x) => x && x.isActive).length
-        : 0;
-
+      const all = Object.keys(users).length;
+      const active = Object.values(users).filter(x => x && x.isActive).length;
       return editOrSend(chatId, `👥 عدد المشتركين:\n\n✅ الكل: ${all}\n🟢 الفعّالين: ${active}`, backToHomeKeyboard());
     }
 
     if (action === "STATS") {
-      const fresh = await ensureUser(chatId);
-      return editOrSend(chatId, `📊 إحصائياتك:\n🆔 ID: ${fresh.uid}\n💰 نقاطك: ${fresh.points}`, backToHomeKeyboard());
+      return editOrSend(chatId, `📊 إحصائياتك:\n🆔 ID: ${u.uid}\n💰 نقاطك: ${u.points}`, backToHomeKeyboard());
     }
 
     if (action === "TERMS") {
@@ -536,320 +711,568 @@ bot.on("callback_query", async (q) => {
 
     if (action === "SERVICES") return showServices(chatId);
 
-    if (action === "COLLECT") {
-      const fresh = await ensureUser(chatId);
-      const available = channels.filter((ch) => !fresh.joinedChannels.includes(ch.link));
-      if (available.length === 0) return editOrSend(chatId, "✅ لقد اشتركت في جميع القنوات المتاحة.", backToHomeKeyboard());
-
-      const buttons = available.map((ch) => [{ text: ch.name, url: ch.link }]);
-      buttons.push([{ text: "✅ تحقّق من الاشتراك", callback_data: "NAV:CHECK_JOIN" }]);
-      buttons.push([{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]);
-
-      return editOrSend(chatId, "📢 اشترك بالقنوات التالية ثم اضغط (تحقّق):", { inline_keyboard: buttons });
+    if (action === "LOCKED_GATE") {
+      u.state.tmp.locked = { step: "WAIT_ID", flow: {} };
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "🚫 بوابة محظورة\n\n🔢 اكتب الايدي مالك:");
     }
 
-    if (action === "CHECK_JOIN") {
-      // نتحقق اشتراك بالقناة BOT_CHANNEL (شرط سريع)
-      const joined = await isJoinedChannel(q.from.id);
-      if (!joined) {
-        return editOrSend(chatId, `❌ لازم تشترك بالقناة أولاً: ${BOT_CHANNEL}`, backToHomeKeyboard());
-      }
+    if (action === "CODE") {
+      u.state.tmp.useCode = { step: "WAIT_CODE" };
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "🔑 اكتب الكود:");
+    }
 
-      // نمنح نقاط لكل قناة من القائمة (مرة وحدة)
-      const fresh = await ensureUser(chatId);
-      const before = new Set(fresh.joinedChannels || []);
-
-      // بما أنه تحقق عام: نضيف كل القنوات اللي مو مسجلة
-      let gained = 0;
-      for (const ch of channels) {
-        if (!before.has(ch.link)) {
-          before.add(ch.link);
-          gained += CHANNEL_JOIN_POINTS;
-        }
-      }
-
-      fresh.joinedChannels = Array.from(before);
-      await updateUser(chatId, { joinedChannels: fresh.joinedChannels });
-
-      if (gained > 0) {
-        await addPoints(chatId, gained);
-        return editOrSend(chatId, `✅ تم التحقق!\n🎁 حصلت: ${gained} نقطة`, backToHomeKeyboard());
-      }
-      return editOrSend(chatId, "✅ أنت مستلم نقاط القنوات مسبقاً.", backToHomeKeyboard());
+    if (action === "SHARE_POINTS") {
+      u.state.tmp.share = { step: "WAIT_FRIEND_ID" };
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "🔢 أدخل ID صديقك لمشاركة النقاط:");
     }
 
     if (action === "DAILY") {
-      const fresh = await ensureUser(chatId);
-      const lastGiftTime = fresh.lastGift ? moment(fresh.lastGift) : null;
+      const lastGiftTime = u.lastGift ? moment(u.lastGift) : null;
       const now = moment();
 
       if (!lastGiftTime || now.diff(lastGiftTime, "hours") >= 24) {
-        await addPoints(chatId, 10);
-        await updateUser(chatId, { lastGift: now.toISOString() });
+        u.points += 10;
+        u.lastGift = now.toISOString();
+        saveJSONSafe(USERS_FILE, users);
         return editOrSend(chatId, "🎁 حصلت على 10 نقاط كمكافأة يومية!", backToHomeKeyboard());
       }
       return editOrSend(chatId, "⏳ يمكنك استلام الهدية بعد 24 ساعة.", backToHomeKeyboard());
     }
 
-    if (action === "CODE") {
-      u.state.tmp.useCode = { step: "WAIT_CODE" };
-      await updateUser(chatId, { state: u.state });
-      return bot.sendMessage(chatId, "🔑 اكتب الكود:").catch(() => {});
+    if (action === "COLLECT") {
+      const available = channels.filter(ch => !u.joinedChannels.includes(ch.link));
+      if (available.length === 0) return editOrSend(chatId, "✅ لقد اشتركت في جميع القنوات المتاحة.", backToHomeKeyboard());
+
+      const buttons = available.map(ch => [{ text: ch.name, url: ch.link }]);
+      buttons.push([{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]);
+
+      await editOrSend(chatId, "📢 اشترك بالقنوات التالية للحصول على نقاط:", { inline_keyboard: buttons });
+
+      setTimeout(() => {
+        const uu = ensureUser(chatId);
+        uu.points += CHANNEL_JOIN_POINTS;
+        uu.joinedChannels.push(available[0].link);
+        saveJSONSafe(USERS_FILE, users);
+        bot.sendMessage(chatId, `✅ حصلت على ${CHANNEL_JOIN_POINTS} نقاط!`);
+      }, 5000);
+
+      return;
     }
 
-    if (action === "SHARE_POINTS") {
-      u.state.tmp.share = { step: "WAIT_FRIEND_ID", friendUid: null };
-      await updateUser(chatId, { state: u.state });
-      return bot.sendMessage(chatId, "🔢 أدخل ID صديقك لمشاركة النقاط:").catch(() => {});
+    if (action === "MAKE_POINTS_CODE") {
+      if (!isAdmin(chatId)) return;
+      u.state.tmp.admin = { step: "WAIT_POINTS_EACH" };
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "✍️ اكتب عدد النقاط لكل شخص (مثلاً 10):");
     }
 
-    if (action === "LOCKED_GATE") {
-      // هنا نخليها بوابة للمشرف فقط
-      u.state.tmp.locked = { step: "WAIT_PASSWORD" };
-      await updateUser(chatId, { state: u.state });
-      return bot.sendMessage(chatId, "🚫 بوابة المشرف\n\n🔐 اكتب كلمة المرور:").catch(() => {});
+    // خدمات
+    if (action === "SVC_TT_LIKES") return showQtyMenu(chatId, "❤️ لايكات تيك توك\nاختر الكمية:", "BUY:TTLIKES", ttLikePrices, "NAV:SERVICES");
+    if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
+    if (action === "SVC_TT_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", "BUY:TTFOLLOW", ttFollowersPrices, "NAV:SERVICES");
+
+    if (action === "SVC_TT_FREEVIEWS") {
+      return editOrSend(chatId, "🎁 مشاهدات تيك توك مجانية\n\nكل 100 مشاهدة = 0 عملة", {
+        inline_keyboard: [
+          [{ text: "100 مشاهدة مجانية", callback_data: "BUY:FREEVIEWS:100" }],
+          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+        ],
+      });
     }
 
-    // ---- خدمات: قوائم كميات ----
-    if (action === "SVC_TT_LIKES") return editOrSend(chatId, "❤️ لايكات تيك توك\nاختر الكمية:", buildQtyKeyboard("QTY:ttlikes", ttLikePrices));
-    if (action === "SVC_TT_VIEWS") return editOrSend(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", buildQtyKeyboard("QTY:ttviews", ttViewPrices));
-    if (action === "SVC_TT_FREEVIEWS") return editOrSend(chatId, "🎁 مشاهدات تيك توك مجانية\nاختر الكمية:", buildQtyKeyboard("QTY:freeviews", ttViewPrices));
-    if (action === "SVC_IG_LIKES") return editOrSend(chatId, "❤️ اعجابات انستقرام\nاختر الكمية:", buildQtyKeyboard("QTY:iglikes", igLikePrices));
-    if (action === "SVC_IG_SHARES") return editOrSend(chatId, "🔁 مشاركات انستقرام\nاختر الكمية:", buildQtyKeyboard("QTY:igshares", igSharePrices));
-    if (action === "SVC_FB_STORY") return editOrSend(chatId, "📘 مشاهدات ستوري فيسبوك\nاختر الكمية:", buildQtyKeyboard("QTY:fbstory", fbStoryPrices));
-    if (action === "SVC_TT_FOLLOWERS") return editOrSend(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", buildQtyKeyboard("QTY:ttfollowers", ttFollowersPrices));
-    if (action === "SVC_IG_FOLLOWERS") return editOrSend(chatId, "👥 متابعين انستقرام (مدى الحياة)\nاختر الكمية:", buildQtyKeyboard("QTY:igfollowers", igFollowersPrices));
+    if (action === "SVC_IG_FREEVIEWS") {
+      return editOrSend(chatId, "🎁 مشاهدات ريلز انستقرام مجانية\n\nكل 100 مشاهدة = 0 عملة", {
+        inline_keyboard: [
+          [{ text: "100 مشاهدة مجانية", callback_data: "BUY:IGFREEVIEWS:100" }],
+          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+        ],
+      });
+    }
+
+    if (action === "SVC_TG_POST_FREE") {
+      return editOrSend(chatId, "🎁 مشاهدات بوست تلجرام مجانية\n\nكل 100 مشاهدة = 0 عملة", {
+        inline_keyboard: [
+          [{ text: "100 مشاهدة مجانية", callback_data: "BUY:TGPOSTFREEVIEWS:100" }],
+          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+        ],
+      });
+    }
+
+    if (action === "SVC_TWITTER_FREE") {
+      return editOrSend(chatId, "🎁 مشاهدات تغريدة تويتر مجانية\n\nكل 100 مشاهدة = 0 عملة", {
+        inline_keyboard: [
+          [{ text: "100 مشاهدة مجانية", callback_data: "BUY:TWITTERFREEVIEWS:100" }],
+          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+        ],
+      });
+    }
+
+    if (action === "SVC_TG_REACTIONS_FREE") {
+      return editOrSend(chatId, "🎁 تفاعل بوست تلجرام (ايموجي) مجاني\n\nكل 50 تفاعل = 0 عملة", {
+        inline_keyboard: [
+          [{ text: "50 تفاعل مجاني", callback_data: "BUY:TGPOSTREACTIONS:50" }],
+          [{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }],
+        ],
+      });
+    }
+
+    if (action === "SVC_TT_LIKES_NEW") return showQtyMenu(chatId, "❤️ اعجابات تيك توك (جديدة)\nاختر الكمية:", "BUY:TTLIKESNEW", ttLikesNewPrices, "NAV:SERVICES");
+    if (action === "SVC_IG_COMMENTS") return showQtyMenu(chatId, "💬 تعليقات عشوائية إنستقرام\nاختر الكمية:", "BUY:IGCOMMENTS", igCommentsPrices, "NAV:SERVICES");
+    if (action === "SVC_YT_LIKES") return showQtyMenu(chatId, "👍 اعجابات يوتيوب\nاختر الكمية:", "BUY:YOUTUBELIKES", youtubeLikesPrices, "NAV:SERVICES");
+    if (action === "SVC_FB_REACTIONS") return showQtyMenu(chatId, "❤️ تفاعلات قلب فيسبوك\nاختر الكمية:", "BUY:FBREACTIONS", fbReactionsPrices, "NAV:SERVICES");
+    if (action === "SVC_FB_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين فيسبوك (مدى الحياة)\nاختر الكمية:", "BUY:FBFOLLOWERS", fbFollowersPrices, "NAV:SERVICES");
+    if (action === "SVC_TG_PREMIUM_VIEWS") return showQtyMenu(chatId, "🌟 مشاهدات تيليجرام بريميوم\nاختر الكمية:", "BUY:TGPREMIUMVIEWS", tgPremiumViewsPrices, "NAV:SERVICES");
+
+    if (action === "SVC_IG_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين إنستقرام (مدى الحياة)\nاختر الكمية:", "BUY:IGFOLLOW", igFollowersPrices, "NAV:SERVICES");
+    if (action === "SVC_TG_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تلغرام\nاختر الكمية:", "BUY:TGFOLLOW", tgFollowerPrices, "NAV:SERVICES");
+    if (action === "SVC_IG_LIKES") return showQtyMenu(chatId, "❤️ اعجابات إنستقرام\nاختر الكمية:", "BUY:IGLIKES", igLikePrices, "NAV:SERVICES");
+    if (action === "SVC_IG_SHARES") return showQtyMenu(chatId, "🔁 مشاركات إنستقرام\nاختر الكمية:", "BUY:IGSHARES", igSharePrices, "NAV:SERVICES");
+    if (action === "SVC_FB_STORY") return showQtyMenu(chatId, "📘 مشاهدات ستوري فيسبوك\nاختر الكمية:", "BUY:FBSTORY", fbStoryPrices, "NAV:SERVICES");
+  }
+
+  // بوابة الأكواد: اختيار maxUses
+  if (data.startsWith("LOCKED_MAX:")) {
+    if (!u.state?.tmp?.locked || u.state.tmp.locked.step !== "WAIT_MAX_CHOICE") return;
+
+    const val = data.split(":")[1];
+    let maxUses = DEFAULT_MAX_USES;
+
+    if (val !== "SKIP") {
+      const n = parseInt(val, 10);
+      if (Number.isFinite(n) && n > 0) maxUses = n;
+    }
+
+    u.state.tmp.locked.flow.maxUses = maxUses;
+    u.state.tmp.locked.step = "READY_CREATE";
+    saveJSONSafe(USERS_FILE, users);
+
+    const flow = u.state.tmp.locked.flow;
+    return editOrSend(
+      chatId,
+      `✅ جاهز للإنشاء\n\n🧾 الكود: ${flow.code}\n⭐️ النقاط لكل شخص: ${flow.points}\n👥 عدد المستخدمين: ${flow.maxUses}\n\n💸 كلفة الإنشاء: ${CREATE_CODE_COST} نقطة\nاضغط إنشاء:`,
+      createLockedKeyboard()
+    );
+  }
+
+  // إنشاء الكود
+  if (data === "LOCKED_CREATE:DO") {
+    const lock = u.state?.tmp?.locked;
+    if (!lock || lock.step !== "READY_CREATE") return bot.sendMessage(chatId, "❌ أكو نقص بالخطوات. افتح البوابة من جديد.");
+
+    if (u.points < CREATE_CODE_COST) {
+      return editOrSend(chatId, `❌ رصيدك غير كافي.\n\n💸 الكلفة: ${CREATE_CODE_COST}\n💎 رصيدك: ${u.points}`, backToHomeKeyboard());
+    }
+
+    const flow = lock.flow || {};
+    const code = String(flow.code || "").trim();
+    const points = parseInt(flow.points, 10);
+    const maxUses = parseInt(flow.maxUses, 10);
+
+    if (!code) return bot.sendMessage(chatId, "❌ الكود فارغ.");
+    if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا.");
+    if (!Number.isFinite(points) || points <= 0) return bot.sendMessage(chatId, "❌ نقاط الكود غير صحيحة.");
+    if (!Number.isFinite(maxUses) || maxUses <= 0) return bot.sendMessage(chatId, "❌ عدد المستخدمين غير صحيح.");
+
+    u.points -= CREATE_CODE_COST;
+
+    codes[code] = { points, usedBy: [], maxUses, createdBy: u.uid, createdAt: new Date().toISOString() };
+
+    saveJSONSafe(USERS_FILE, users);
+    saveCodes();
+
+    u.state.tmp.locked = null;
+    saveJSONSafe(USERS_FILE, users);
+
+    return editOrSend(
+      chatId,
+      `✅ تم انشاءه بنجاح!\n\n🧾 الكود: ${code}\n⭐️ لكل شخص: ${points} نقطة\n👥 عدد المستخدمين: ${maxUses}\n\n💸 تم خصم: ${CREATE_CODE_COST}\n💎 رصيدك الحالي: ${u.points}`,
+      { inline_keyboard: [[{ text: "⬅️ رجوع إلى الاقسام", callback_data: "NAV:HOME" }]] }
+    );
+  }
+
+  // شراء خدمة
+  if (data.startsWith("BUY:")) {
+    const parts = data.split(":");
+    const type = parts[1];
+    const qty = parseInt(parts[2], 10);
+
+    let cost = 0;
+    let askText = "";
+    let orderType = "";
+
+    if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
+    if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
+    if (type === "TTFOLLOW") { cost = ttFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب تيك توك:"; orderType = "ttfollowers"; }
+    if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
+    if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط (https://t.me/..):"; orderType = "tgfollowers"; }
+    if (type === "IGLIKES") { cost = igLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "iglikes"; }
+    if (type === "IGSHARES") { cost = igSharePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "igshares"; }
+    if (type === "FBSTORY") { cost = fbStoryPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "fbstory"; }
+    if (type === "IGFOLLOW") { cost = igFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب إنستقرام:"; orderType = "igfollowers"; }
+
+    // 🎁 مجانية
+    if (type === "IGFREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط ريلز انستقرام:"; orderType = "igfreeviews"; }
+    if (type === "TGPOSTFREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط بوست تلجرام:"; orderType = "tgpostfreeviews"; }
+    if (type === "TWITTERFREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط تغريدة تويتر:"; orderType = "twitterfreeviews"; }
+    if (type === "TGPOSTREACTIONS") { cost = 0; askText = "🔗 أرسل رابط بوست تلجرام:"; orderType = "tgpostreactions"; }
+
+    // خدمات جديدة
+    if (type === "TTLIKESNEW") { cost = ttLikesNewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes_new"; }
+    if (type === "IGCOMMENTS") { cost = igCommentsPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "igcomments"; }
+    if (type === "YOUTUBELIKES") { cost = youtubeLikesPrices[qty] || 0; askText = "🔗 أرسل رابط فيديو اليوتيوب:"; orderType = "youtubelikes"; }
+    if (type === "FBREACTIONS") { cost = fbReactionsPrices[qty] || 0; askText = "🔗 أرسل رابط منشور الفيسبوك:"; orderType = "fbreactions"; }
+    if (type === "FBFOLLOWERS") { cost = fbFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط صفحة الفيسبوك:"; orderType = "fbfollowers"; }
+    if (type === "TGPREMIUMVIEWS") { cost = tgPremiumViewsPrices[qty] || 0; askText = "🔗 أرسل رابط منشور التليجرام:"; orderType = "tgpremiumviews"; }
+
+    if (!orderType) return editOrSend(chatId, "❌ خيار غير صالح.", backToHomeKeyboard());
+    if (cost > 0 && !requireBalanceOrWarn(chatId, u, cost)) return;
+
+    const serviceId = ORDER_TYPE_TO_SERVICE_ID[orderType] || null;
+
+    setPending(chatId, { orderType, qty, cost, step: "WAIT_LINK", serviceId });
+
+    await editOrSend(chatId, `✅ تم اختيار: ${qty}\n💰 السعر: ${cost}\n🧩 رقم الخدمة: ${serviceId ?? "غير معروف"}\n\n📩 الآن ارسل المطلوب بالرسالة التالية.`, {
+      inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:SERVICES" }]],
+    });
+
+    return bot.sendMessage(chatId, askText);
+  }
+});
+
+// =====================
+// 15) SINGLE MESSAGE HANDLER
+// =====================
+bot.on("message", async (msg) => {
+  const chatId = msg.chat.id;
+  const u = ensureUser(chatId);
+  const text = normalizeText(msg.text);
+
+  u.lastSeen = new Date().toISOString();
+  u.isActive = true;
+  saveJSONSafe(USERS_FILE, users);
+
+  if (text === SECRET_OPEN) {
+    if (!isAdmin(chatId)) return;
+    return editOrSend(chatId, "✅ تم فتح لوحة الأدمن.", adminKeyboard());
+  }
+
+  const pending = pendingOrders[chatId];
+  if (pending && pending.step === "WAIT_LINK") {
+    const link = text;
+    if (!link || link.length < 4) return bot.sendMessage(chatId, "❌ الرابط/المعرف غير صحيح. ارسله مرة ثانية.");
+
+    const orderId = genOrderId();
+    const order = {
+      orderId,
+      chatId: String(chatId),
+      uid: u.uid,
+      orderType: pending.orderType,
+      serviceId: pending.serviceId ?? null,
+      qty: pending.qty,
+      cost: pending.cost,
+      link,
+      status: "PENDING",
+      createdAt: new Date().toISOString(),
+      remoteOrderId: null,
+      apiResponse: null,
+      apiError: null,
+    };
+
+    let deducted = 0;
+    if (pending.cost > 0) {
+      if (u.points < pending.cost) {
+        clearPending(chatId);
+        return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💰 السعر: ${pending.cost}\n💎 رصيدك: ${u.points}`);
+      }
+      u.points -= pending.cost;
+      deducted = pending.cost;
+      saveJSONSafe(USERS_FILE, users);
+    }
+
+    orders.push(order);
+    saveOrders();
+    clearPending(chatId);
+
+    try {
+      if (!order.serviceId) throw new Error("Missing serviceId");
+
+      const apiResp = await sendOrderDirect({
+        service: order.serviceId,
+        link: order.link,
+        quantity: order.qty,
+      });
+
+      order.apiResponse = apiResp;
+
+      const remote = apiResp?.order || apiResp?.orderId || apiResp?.order_id || apiResp?.id || null;
+
+      if (remote) {
+        order.status = "SENT";
+        order.remoteOrderId = String(remote);
+      } else if (apiResp?.error) {
+        order.status = "FAILED";
+        order.apiError = String(apiResp.error);
+      } else {
+        order.status = "FAILED";
+        order.apiError = JSON.stringify(apiResp);
+      }
+
+      if (order.status === "FAILED" && deducted > 0) {
+        u.points += deducted;
+        saveJSONSafe(USERS_FILE, users);
+      }
+
+      saveOrders();
+    } catch (e) {
+      order.status = "FAILED";
+      order.apiError = e?.response?.data ? JSON.stringify(e.response.data) : (e?.message || String(e));
+
+      if (deducted > 0) {
+        u.points += deducted;
+        saveJSONSafe(USERS_FILE, users);
+      }
+
+      saveOrders();
+    }
+
+    const remoteTxt = order.remoteOrderId ? `\n🌐 رقم الطلب بالموقع: ${order.remoteOrderId}` : "";
+    const statusTxt = order.status === "SENT" ? "✅ تم الإرسال للموقع" : "❌ فشل الإرسال للموقع (تم ارجاع النقاط إذا انخصمت)";
+
+    bot.sendMessage(
+      chatId,
+      `✅ تم إنشاء طلبك!\n\n🧾 رقم الطلب: ${order.orderId}${remoteTxt}\n🧩 رقم الخدمة: ${order.serviceId ?? "غير معروف"}\n🔢 الكمية: ${order.qty}\n💰 السعر: ${order.cost}\n🔗 المطلوب: ${order.link}\n\n${statusTxt}\n💎 رصيدك الحالي: ${u.points}`
+    );
+
+    bot.sendMessage(
+      ADMIN_CHAT_ID,
+      `📥 طلب جديد\n\n🧾 رقم الطلب: ${order.orderId}\n🌐 خارجي: ${order.remoteOrderId ?? "-"}\n🧩 رقم الخدمة: ${order.serviceId ?? "غير معروف"}\n👤 المستخدم: ${order.uid}\n🛍 النوع: ${order.orderType}\n🔢 الكمية: ${order.qty}\n💰 السعر: ${order.cost}\n🔗 المطلوب: ${order.link}\n📌 الحالة: ${order.status}\n🕒 ${order.createdAt}\n${order.apiError ? `\n⚠️ خطأ API: ${order.apiError}` : ""}`
+    ).catch(() => {});
 
     return;
   }
 
-  // ---------------- QTY (اختيار كمية خدمة) ----------------
-  if (data.startsWith("QTY:")) {
-    const [, orderType, qtyStr] = data.split(":"); // QTY:ttlikes:10
-    const qty = parseInt(qtyStr, 10);
-
-    // السعر حسب نوع الخدمة
-    const priceMap = {
-      ttlikes: ttLikePrices,
-      ttviews: ttViewPrices,
-      freeviews: ttViewPrices,
-      iglikes: igLikePrices,
-      igshares: igSharePrices,
-      fbstory: fbStoryPrices,
-      tgfollowers: tgFollowerPrices,
-      ttfollowers: ttFollowersPrices,
-      igfollowers: igFollowersPrices,
-    }[orderType];
-
-    if (!priceMap || !priceMap[qty]) {
-      return editOrSend(chatId, "❌ اختيار غير صحيح.", backToHomeKeyboard());
+  // بوابة الأكواد
+  if (u.state?.tmp?.locked?.step === "WAIT_ID") {
+    if (text !== u.uid) {
+      u.state.tmp.locked = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ الايدي غير صحيح. ارجع اضغط زر البوابة من جديد.");
     }
-
-    const cost = Number(priceMap[qty]);
-    await setPending(chatId, { step: "WAIT_LINK", orderType, quantity: qty, cost });
-
-    return bot.sendMessage(
-      chatId,
-      `✅ تم اختيار الكمية: ${qty}\n💰 السعر: ${cost} عملة\n\n🔗 الآن ارسل الرابط:`
-    ).catch(() => {});
+    u.state.tmp.locked.step = "WAIT_PASS";
+    saveJSONSafe(USERS_FILE, users);
+    return bot.sendMessage(chatId, "✅ تم التحقق من الايدي.\n\n🔐 اكتب كلمة السر:");
   }
 
-});
-
-// =========================================================
-// 11) MESSAGE ROUTER (الخطوات النصية: كود/مشاركة/مشرف/روابط خدمات)
-// =========================================================
-bot.on("message", async (msg) => {
-  const chatId = String(msg.chat.id);
-  const text = normalizeText(msg.text || "");
-
-  // ignore commands هنا
-  if (text.startsWith("/start")) return;
-
-  const u = await ensureUser(chatId);
-
-  // 1) Pending order link
-  const pending = await getPending(chatId);
-  if (pending && pending.step === "WAIT_LINK") {
-    const link = text;
-
-    const service = ORDER_TYPE_TO_SERVICE_ID[pending.orderType];
-    if (!service) {
-      await clearPending(chatId);
-      return bot.sendMessage(chatId, "❌ خدمة غير معروفة.").catch(() => {});
+  if (u.state?.tmp?.locked?.step === "WAIT_PASS") {
+    if (text !== LOCKED_PASSWORD) {
+      u.state.tmp.locked = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ كلمة السر غير صحيحة.");
     }
-
-    // خصم نقاط
-    const ok = await takePoints(chatId, pending.cost);
-    if (!ok) {
-      await clearPending(chatId);
-      return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💰 السعر: ${pending.cost}`).catch(() => {});
-    }
-
-    // إرسال الطلب
-    try {
-      const res = await sendOrderDirect({ service, link, quantity: pending.quantity });
-      const orderId = genOrderId();
-
-      await addOrder(orderId, {
-        chatId,
-        service,
-        orderType: pending.orderType,
-        quantity: pending.quantity,
-        cost: pending.cost,
-        link,
-        apiResponse: res,
-        createdAt: new Date().toISOString(),
-      });
-
-      await clearPending(chatId);
-
-      if (res && res.order) {
-        await bot.sendMessage(chatId, `✅ تم تنفيذ الطلب بنجاح!\n🔹 رقم الطلب: ${res.order}`).catch(() => {});
-      } else {
-        await bot.sendMessage(chatId, `⚠️ تم إرسال الطلب بس الرد غير واضح.\n🧾 الرد: ${JSON.stringify(res)}`).catch(() => {});
-      }
-
-      return showHome(chatId);
-    } catch (e) {
-      await clearPending(chatId);
-      // رجّع النقاط إذا فشل
-      await addPoints(chatId, pending.cost);
-      return bot.sendMessage(chatId, "❌ حدث خطأ أثناء تنفيذ الطلب وتم إرجاع رصيدك.").catch(() => {});
-    }
+    u.state.tmp.locked = { step: "WAIT_CODE", flow: {} };
+    saveJSONSafe(USERS_FILE, users);
+    return bot.sendMessage(chatId, "✅ تم فتح البوابة.\n\n✍️ اكتب الكود اللي تريد تنشئه:");
   }
 
-  // 2) use code flow
+  if (u.state?.tmp?.locked?.step === "WAIT_CODE") {
+    const code = (text || "").trim();
+    if (!code) return bot.sendMessage(chatId, "❌ اكتب كود صحيح.");
+    if (codes[code]) return bot.sendMessage(chatId, "❌ هذا الكود موجود مسبقًا. اكتب كود غيره.");
+    u.state.tmp.locked.flow = { code };
+    u.state.tmp.locked.step = "WAIT_POINTS";
+    saveJSONSafe(USERS_FILE, users);
+    return bot.sendMessage(chatId, "⭐️ اكتب كم نقطة يحصلون من هذا الكود؟ (مثلاً 10):");
+  }
+
+  if (u.state?.tmp?.locked?.step === "WAIT_POINTS") {
+    const points = parseInt((text || "").trim(), 10);
+    if (!Number.isFinite(points) || points <= 0) {
+      return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0. اكتب النقاط مرة ثانية:");
+    }
+    u.state.tmp.locked.flow.points = points;
+    u.state.tmp.locked.step = "WAIT_MAX_CHOICE";
+    saveJSONSafe(USERS_FILE, users);
+    return editOrSend(chatId, "👥 اختر عدد الناس اللي يستخدمون الكود (1/2/3/4) أو تخطي:", maxUsesKeyboardLocked());
+  }
+
+  // استخدام الكود
   if (u.state?.tmp?.useCode?.step === "WAIT_CODE") {
-    const code = text.replace(/\s+/g, "");
-    const c = await getCode(code);
+    const code = text;
+    const codeData = codes[code];
+
+    if (!codeData) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ كود غير صحيح أو انتهت صلاحيته.");
+    }
+
+    codeData.usedBy = codeData.usedBy || [];
+
+    if (codeData.usedBy.includes(String(chatId))) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ انت مستخدم هذا الكود من قبل.");
+    }
+
+    if (codeData.usedBy.length >= codeData.maxUses) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته.");
+    }
+
+    u.state.tmp.useCode = { step: "WAIT_ID", code };
+    saveJSONSafe(USERS_FILE, users);
+    return bot.sendMessage(chatId, "🔢 اكتب ID مالك حتى تستلم النقاط:");
+  }
+
+  if (u.state?.tmp?.useCode?.step === "WAIT_ID") {
+    const code = u.state.tmp.useCode.code;
+    const codeData = codes[code];
+
+    if (!codeData) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ الكود غير موجود أو انتهى.");
+    }
+
+    if (text !== u.uid) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ الـ ID اللي كتبته مو مالك.");
+    }
+
+    codeData.usedBy = codeData.usedBy || [];
+
+    if (codeData.usedBy.includes(String(chatId))) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ انت مستخدم هذا الكود من قبل.");
+    }
+
+    if (codeData.usedBy.length >= codeData.maxUses) {
+      u.state.tmp.useCode = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ تم انتهاء صلاحيته.");
+    }
+
+    u.points += codeData.points;
+    codeData.usedBy.push(String(chatId));
+
+    if (codeData.usedBy.length >= codeData.maxUses) {
+      delete codes[code];
+    }
+
+    saveJSONSafe(USERS_FILE, users);
+    saveCodes();
 
     u.state.tmp.useCode = null;
-    await updateUser(chatId, { state: u.state });
+    saveJSONSafe(USERS_FILE, users);
 
-    if (!c) return bot.sendMessage(chatId, "❌ الكود غير صحيح.").catch(() => {});
-
-    const usedBy = c.usedBy || {};
-    const maxUses = Number(c.maxUses || DEFAULT_MAX_USES);
-    const usedCount = Object.keys(usedBy).length;
-
-    if (usedBy[chatId]) return bot.sendMessage(chatId, "⚠️ أنت مستخدم هذا الكود مسبقاً.").catch(() => {});
-    if (usedCount >= maxUses) return bot.sendMessage(chatId, "⚠️ الكود منتهي (وصل الحد).").catch(() => {});
-
-    // نحدّث الكود + نضيف نقاط للمستخدم (transaction على الكود)
-    await refCodes.child(code).child("usedBy").child(chatId).set(true);
-    await addPoints(chatId, Number(c.points || 0));
-
-    await bot.sendMessage(chatId, `✅ تم قبول الكود!\n🎁 حصلت: ${c.points} نقطة`).catch(() => {});
-    return showHome(chatId);
+    return bot.sendMessage(chatId, `✅ تم إضافة ${codeData.points} نقطة إلى حسابك.\n💎 رصيدك الحالي: ${u.points}`);
   }
 
-  // 3) share points flow
+  // مشاركة النقاط
   if (u.state?.tmp?.share?.step === "WAIT_FRIEND_ID") {
     const friendUid = text;
     u.state.tmp.share.friendUid = friendUid;
     u.state.tmp.share.step = "WAIT_AMOUNT";
-    await updateUser(chatId, { state: u.state });
-    return bot.sendMessage(chatId, "💰 اكتب المبلغ اللي تريد ترسله:").catch(() => {});
+    saveJSONSafe(USERS_FILE, users);
+    return bot.sendMessage(chatId, "💰 أدخل عدد النقاط التي تريد إرسالها:");
   }
 
   if (u.state?.tmp?.share?.step === "WAIT_AMOUNT") {
-    const amount = parseInt(text, 10);
+    const amount = parseInt(text || "0", 10);
     const friendUid = u.state.tmp.share.friendUid;
 
+    if (!Number.isFinite(amount) || amount <= 0) return bot.sendMessage(chatId, "❌ أدخل رقم صحيح.");
+    if (amount > u.points) return bot.sendMessage(chatId, "❌ ليس لديك نقاط كافية.");
+
+    const friendChatId = Object.keys(users).find(cid => users[cid]?.uid === friendUid);
+    if (!friendChatId) {
+      u.state.tmp.share = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ لم يتم العثور على هذا المستخدم.");
+    }
+
+    u.points -= amount;
+    users[friendChatId].points += amount;
+    saveJSONSafe(USERS_FILE, users);
+
     u.state.tmp.share = null;
-    await updateUser(chatId, { state: u.state });
+    saveJSONSafe(USERS_FILE, users);
 
-    if (!amount || amount <= 0) return bot.sendMessage(chatId, "❌ مبلغ غير صحيح.").catch(() => {});
-
-    // نبحث عن friend by uid
-    const allUsersSnap = await refUsers.get();
-    const allUsers = allUsersSnap.exists() ? allUsersSnap.val() : {};
-    const friendChatId = Object.keys(allUsers).find((cid) => allUsers[cid]?.uid === friendUid);
-
-    if (!friendChatId) return bot.sendMessage(chatId, "❌ ماكو مستخدم بهذا الـ ID.").catch(() => {});
-
-    const ok = await takePoints(chatId, amount);
-    if (!ok) return bot.sendMessage(chatId, "❌ رصيدك غير كافي.").catch(() => {});
-
-    await addPoints(friendChatId, amount);
-
-    await bot.sendMessage(chatId, `✅ تم إرسال ${amount} نقطة.`).catch(() => {});
-    await bot.sendMessage(friendChatId, `🎁 وصلك تحويل نقاط!\n✅ استلمت ${amount} نقطة.`).catch(() => {});
-    return showHome(chatId);
+    bot.sendMessage(chatId, `✅ تم إرسال ${amount} نقطة إلى ID: ${friendUid}`);
+    bot.sendMessage(friendChatId, `🎉 وصلك ${amount} نقطة من مستخدم آخر!`);
+    return;
   }
 
-  // 4) locked admin gate
-  if (u.state?.tmp?.locked?.step === "WAIT_PASSWORD") {
-    if (text !== LOCKED_PASSWORD) {
-      u.state.tmp.locked = null;
-      await updateUser(chatId, { state: u.state });
-      return bot.sendMessage(chatId, "❌ كلمة المرور خطأ.").catch(() => {});
+  // أدمن: إنشاء كود نقاط
+  if (u.state?.tmp?.admin?.step === "WAIT_POINTS_EACH") {
+    const pointsEach = parseInt(text, 10);
+    if (!Number.isFinite(pointsEach) || pointsEach <= 0) {
+      u.state.tmp.admin = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
     }
-
-    // إذا مو أدمن نخليه يسوي كود مقابل كلفة
-    if (!isAdmin(chatId)) {
-      u.state.tmp.locked = { step: "WAIT_CODE_POINTS", maxUses: DEFAULT_MAX_USES };
-      await updateUser(chatId, { state: u.state });
-      return bot.sendMessage(chatId, `✅ تم الدخول.\n\n💰 اكتب عدد النقاط داخل الكود (مثلاً 50):`).catch(() => {});
-    }
-
-    // أدمن: ينشئ كود نقاط
-    u.state.tmp.locked = { step: "WAIT_CODE_POINTS", maxUses: DEFAULT_MAX_USES, admin: true };
-    await updateUser(chatId, { state: u.state });
-    return bot.sendMessage(chatId, "✅ أهلاً مشرف.\n\n💰 اكتب عدد النقاط للكود:").catch(() => {});
+    u.state.tmp.admin = { step: "WAIT_MAX_USES", pointsEach };
+    saveJSONSafe(USERS_FILE, users);
+    return bot.sendMessage(chatId, "👥 اكتب عدد الأشخاص اللي يقدرون يستخدمون الكود (مثلاً 4):");
   }
 
-  if (u.state?.tmp?.locked?.step === "WAIT_CODE_POINTS") {
-    const points = parseInt(text, 10);
-    if (!points || points <= 0) return bot.sendMessage(chatId, "❌ رقم نقاط غير صحيح.").catch(() => {});
+  if (u.state?.tmp?.admin?.step === "WAIT_MAX_USES") {
+    const maxUses = parseInt(text, 10);
+    const pointsEach = u.state.tmp.admin.pointsEach;
 
-    u.state.tmp.locked.points = points;
-    u.state.tmp.locked.step = "WAIT_MAX_USES";
-    await updateUser(chatId, { state: u.state });
-
-    return bot.sendMessage(chatId, "🔢 اكتب عدد مرات الاستخدام للكود (مثلاً 1 أو 5) أو اكتب skip للتخطي:").catch(() => {});
-  }
-
-  if (u.state?.tmp?.locked?.step === "WAIT_MAX_USES") {
-    let maxUses = DEFAULT_MAX_USES;
-    if (text.toLowerCase() !== "skip") {
-      const n = parseInt(text, 10);
-      if (!n || n <= 0) return bot.sendMessage(chatId, "❌ رقم غير صحيح.").catch(() => {});
-      maxUses = n;
+    if (!Number.isFinite(maxUses) || maxUses <= 0) {
+      u.state.tmp.admin = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, "❌ لازم رقم صحيح أكبر من 0.");
     }
 
-    const points = Number(u.state.tmp.locked.points || 0);
-
-    // إذا مو أدمن: نخصم كلفة الانشاء
-    if (!isAdmin(chatId)) {
-      const ok = await takePoints(chatId, CREATE_CODE_COST);
-      if (!ok) {
-        u.state.tmp.locked = null;
-        await updateUser(chatId, { state: u.state });
-        return bot.sendMessage(chatId, `❌ رصيدك غير كافي لإنشاء كود.\n💰 الكلفة: ${CREATE_CODE_COST}`).catch(() => {});
-      }
+    const totalCost = pointsEach * maxUses;
+    if (u.points < totalCost) {
+      u.state.tmp.admin = null;
+      saveJSONSafe(USERS_FILE, users);
+      return bot.sendMessage(chatId, `❌ رصيدك غير كافي.\n💸 الكلفة: ${totalCost}\n💎 رصيدك: ${u.points}`);
     }
 
-    const code = genCode(10);
-    await setCode(code, {
-      points,
-      maxUses,
-      usedBy: {},
-      createdAt: new Date().toISOString(),
-      createdBy: chatId,
-    });
+    u.points -= totalCost;
+    saveJSONSafe(USERS_FILE, users);
 
-    u.state.tmp.locked = null;
-    await updateUser(chatId, { state: u.state });
+    let code = genCode(10);
+    while (codes[code]) code = genCode(10);
 
-    await bot.sendMessage(chatId, `✅ تم إنشاء الكود بنجاح!\n\n🔑 الكود: ${code}\n🎁 نقاطه: ${points}\n🔁 max: ${maxUses}`).catch(() => {});
-    return showHome(chatId);
+    codes[code] = { points: pointsEach, usedBy: [], maxUses, createdBy: u.uid, createdAt: new Date().toISOString() };
+
+    saveCodes();
+
+    u.state.tmp.admin = null;
+    saveJSONSafe(USERS_FILE, users);
+
+    return bot.sendMessage(
+      chatId,
+      `✅ تم إنشاء الكود!\n\n🧾 الكود: ${code}\n⭐️ لكل شخص: ${pointsEach}\n👥 العدد: ${maxUses}\n💸 تم خصم: ${totalCost}\n💎 رصيدك الحالي: ${u.points}`,
+      { reply_markup: { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] } }
+    );
   }
-
 });
 
-// =========================================================
-// 12) STARTUP LOG
-// =========================================================
-console.log("✅ Bot is running with Firebase RTDB persistence...");
+// =====================
+// Graceful Exit
+// =====================
+function gracefulExit(signal) {
+  console.log(`\n🛑 ${signal}: saving...`);
+
+  try { saveJSONSafe(USERS_FILE, users); } catch (_) {}
+  try { saveJSONSafe(CODES_FILE, codes); } catch (_) {}
+  try { saveJSONSafe(ORDERS_FILE, orders); } catch (_) {}
+
+  try { bot.stopPolling(); } catch (_) {}
+  process.exit(0);
+}
+
+process.on("SIGINT", () => gracefulExit("SIGINT"));
+process.on("SIGTERM", () => gracefulExit("SIGTERM"));
