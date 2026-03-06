@@ -553,7 +553,7 @@ function makeReferralLink(u) {
 // 8) SERVICES PRICES
 // =====================
 
-const ttViewPrices = { 10: 1000, 20: 2000, 30: 3000, 40: 4000 };
+const ttViewPrices = { 1000: 10, 2000: 20, 3000: 30, 4000: 40 };
 const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
 const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
 const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
