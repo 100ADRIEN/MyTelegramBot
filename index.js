@@ -427,9 +427,6 @@ function homeKeyboard() {
         { text: "🔑 استخدام الكود", callback_data: "NAV:CODE" },
       ],
       [
-        { text: "💎 أسعار النقاط", callback_data: "NAV:PRICES" }
-      ],
-      [
         { text: "📜 الشروط", callback_data: "NAV:TERMS" },
         { text: LOCKED_BTN_TEXT, callback_data: "NAV:LOCKED_GATE" },
       ],
@@ -808,34 +805,6 @@ bot.on("callback_query", async (q) => {
     }
 
 
-    if (data === "NAV:PRICES") {
-
-const msg =` 
-💎 *أسعار نقاط البوت*
-
-$5 = 20000 نقطة 💎
-$10 = 33000 نقطة 💎
-$20 = 57000 نقطة 💎
-$50 = 105000 نقطة 💎
-$150 = 200000 نقطة 💎
-
-━━━━━━━━━━━━━━
-
-📩 *لشراء النقاط تواصل معنا من هنا:*
-`;
-
-bot.sendMessage(chatId, msg, {
-parse_mode: "Markdown",
-reply_markup: {
-inline_keyboard: [
-[
-{ text: "📨 تواصل للشراء", url: "https://t.me/GWVEW" }
-]
-]
-}
-});
-
-}
 
     if (action === "SERVICES") return showServices(chatId);
 
