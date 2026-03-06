@@ -94,7 +94,8 @@ const CHANNEL_JOIN_POINTS = 5;
 // =====================
 
 const VIEWS_SERVICE_ID = 10899; // 👁 مشاهدات تيك توك
-// 🎁 خدمات مجانية إضافية
+const TIKTOK_PK_SCORE_SERVICE_ID = 5565; // 🏆 رفع سكور تيك توك PK
+
 const IG_REELS_FREE_VIEWS_SERVICE_ID = 10870; // 🎁 ريلز انستقرام مجاني
 const TG_POST_FREE_VIEWS_SERVICE_ID = 10871; // 🎁 مشاهدات بوست تلجرام مجانية
 const TWITTER_FREE_VIEWS_SERVICE_ID = 10872; // 🎁 مشاهدات تغريدة تويتر مجانية
@@ -124,6 +125,7 @@ const TELEGRAM_PREMIUM_VIEWS_SERVICE_ID = 10908; // 🌟 مشاهدات مميز
 const ORDER_TYPE_TO_SERVICE_ID = {
   
   ttviews: VIEWS_SERVICE_ID,
+  ttpkscore: TIKTOK_PK_SCORE_SERVICE_ID,
   freeviews: TIKTOK_FREE_VIEWS_SERVICE_ID,
   ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
   ttlikes_new: TIKTOK_LIKES_SERVICE_ID,
@@ -443,6 +445,7 @@ function servicesKeyboard() {
     inline_keyboard: [
       // 🎬 تيك توك
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
+      [{ text: "🏆 رفع سكور تيك توك PK", callback_data: "NAV:SVC_TT_PK_SCORE" }],
       [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
       [{ text: "🎁 مشاهدات ريلز انستقرام مجانية", callback_data: "NAV:SVC_IG_FREEVIEWS" }],
@@ -560,6 +563,14 @@ const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
 const tgFollowerPrices = { 10: 80, 20: 160, 30: 210, 40: 260, 50: 310, 500: 600, 1000: 1000 };
 const ttFollowersPrices = { 500: 5000, 1000: 10000, 30: 2000 }; // مثال (غيرها حسب سعر نقاطك)
 const igFollowersPrices = { 10: 1500, 100: 3000, 1000: 15000, 10000: 49000 };
+
+// 🏆 تيك توك (رفع سكور PK)
+const ttPkScorePrices = { 
+  500: 200, 
+  1000: 500, 
+  5000: 3000, 
+  10000: 6000 
+};
 
 // 🎬 تيك توك (اعجابات جديدة)
 const ttLikesNewPrices = { 10: 90, 100: 400, 500: 900, 1000: 1450, 10000: 8000 };
@@ -897,7 +908,11 @@ inline_keyboard: [
 
     // خدمات
     
-    if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
+    if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:",
+     "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
+
+     if (action === "SVC_TT_PK_SCORE") return showQtyMenu(chatId, "🏆 رفع سكور تيك توك PK\nاختر الكمية:", "BUY:TTPKSCORE", ttPkScorePrices, "NAV:SERVICES");
+
     if (action === "SVC_TT_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", "BUY:TTFOLLOW", ttFollowersPrices, "NAV:SERVICES");
 
     if (action === "SVC_TT_FREEVIEWS") {
@@ -1030,6 +1045,7 @@ inline_keyboard: [
     let orderType = "";
 
     if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
+    if (type === "TTPKSCORE") { cost = ttPkScorePrices[qty] || 0; askText = "🔗 أرسل رابط PK تيك توك:"; orderType = "ttpkscore"; }
     if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
     if (type === "TTFOLLOW") { cost = ttFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب تيك توك:"; orderType = "ttfollowers"; }
     if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
