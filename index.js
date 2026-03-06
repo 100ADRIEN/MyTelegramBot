@@ -93,7 +93,7 @@ const CHANNEL_JOIN_POINTS = 5;
 // ✅ أرقام الخدمات (Service IDs)
 // =====================
 
-const VIEWS_SERVICE_ID = 5202; // 👁 مشاهدات تيك توك
+
 // 🎁 خدمات مجانية إضافية
 const IG_REELS_FREE_VIEWS_SERVICE_ID = 10870; // 🎁 ريلز انستقرام مجاني
 const TG_POST_FREE_VIEWS_SERVICE_ID = 10871; // 🎁 مشاهدات بوست تلجرام مجانية
@@ -442,7 +442,7 @@ function servicesKeyboard() {
   return {
     inline_keyboard: [
       // 🎬 تيك توك
-      [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
+     
       [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
       [{ text: "🎁 مشاهدات ريلز انستقرام مجانية", callback_data: "NAV:SVC_IG_FREEVIEWS" }],
@@ -553,7 +553,6 @@ function makeReferralLink(u) {
 // 8) SERVICES PRICES
 // =====================
 
-const ttViewPrices = { 500: 50, 1000: 100, 1500: 150, 3000: 200 };
 const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
 const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
 const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
@@ -897,7 +896,7 @@ inline_keyboard: [
 
     // خدمات
     
-    if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
+
     if (action === "SVC_TT_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", "BUY:TTFOLLOW", ttFollowersPrices, "NAV:SERVICES");
 
     if (action === "SVC_TT_FREEVIEWS") {
@@ -1029,8 +1028,7 @@ inline_keyboard: [
     let askText = "";
     let orderType = "";
 
-    if (type === "TTLIKES") { cost = ttLikePrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttlikes"; }
-    if (type === "TTVIEWS") { cost = ttViewPrices[qty] || 0; askText = "🔗 أرسل رابط:"; orderType = "ttviews"; }
+
     if (type === "TTFOLLOW") { cost = ttFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب تيك توك:"; orderType = "ttfollowers"; }
     if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
     if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط (https://t.me/..):"; orderType = "tgfollowers"; }
