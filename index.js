@@ -95,7 +95,7 @@ const CHANNEL_JOIN_POINTS = 5;
 
 
 // 🎁 خدمات مجانية إضافية
-const TIKTOK_VIEWS_NEW_SERVICE_ID = 10899; // 👁 مشاهدات تيك توك (الخدمة الجديدة)
+const TIKTOK_VIEWS_SERVICE_ID = 10899; // 👁 مشاهدات تيك توك
 const IG_REELS_FREE_VIEWS_SERVICE_ID = 10870; // 🎁 ريلز انستقرام مجاني
 const TG_POST_FREE_VIEWS_SERVICE_ID = 10871; // 🎁 مشاهدات بوست تلجرام مجانية
 const TWITTER_FREE_VIEWS_SERVICE_ID = 10872; // 🎁 مشاهدات تغريدة تويتر مجانية
@@ -124,7 +124,7 @@ const TELEGRAM_PREMIUM_VIEWS_SERVICE_ID = 10908; // 🌟 مشاهدات مميز
 
 const ORDER_TYPE_TO_SERVICE_ID = {
 
-  ttviews2: TIKTOK_VIEWS_NEW_SERVICE_ID,
+  ttviews: TIKTOK_VIEWS_SERVICE_ID,
   ttviews: VIEWS_SERVICE_ID,
   freeviews: TIKTOK_FREE_VIEWS_SERVICE_ID,
   ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
@@ -425,6 +425,9 @@ function homeKeyboard() {
       [
         { text: "🔗 مشاركة البوت", callback_data: "NAV:REF" },
         { text: "🔑 استخدام الكود", callback_data: "NAV:CODE" },
+      ],
+      [
+        { text: "💎 أسعار النقاط", callback_data: "NAV:PRICES" }
       ],
       [
         { text: "📜 الشروط", callback_data: "NAV:TERMS" },
@@ -805,6 +808,34 @@ bot.on("callback_query", async (q) => {
     }
 
 
+    if (data === "NAV:PRICES") {
+
+const msg =` 
+💎 *أسعار نقاط البوت*
+
+$5 = 20000 نقطة 💎
+$10 = 33000 نقطة 💎
+$20 = 57000 نقطة 💎
+$50 = 105000 نقطة 💎
+$150 = 200000 نقطة 💎
+
+━━━━━━━━━━━━━━
+
+📩 *لشراء النقاط تواصل معنا من هنا:*
+`;
+
+bot.sendMessage(chatId, msg, {
+parse_mode: "Markdown",
+reply_markup: {
+inline_keyboard: [
+[
+{ text: "📨 تواصل للشراء", url: "https://t.me/GWVEW" }
+]
+]
+}
+});
+
+}
 
     if (action === "SERVICES") return showServices(chatId);
 
