@@ -95,6 +95,7 @@ const CHANNEL_JOIN_POINTS = 5;
 
 
 // 🎁 خدمات مجانية إضافية
+const TIKTOK_VIEWS_NEW_SERVICE_ID = 10899; // 👁 مشاهدات تيك توك (الخدمة الجديدة)
 const IG_REELS_FREE_VIEWS_SERVICE_ID = 10870; // 🎁 ريلز انستقرام مجاني
 const TG_POST_FREE_VIEWS_SERVICE_ID = 10871; // 🎁 مشاهدات بوست تلجرام مجانية
 const TWITTER_FREE_VIEWS_SERVICE_ID = 10872; // 🎁 مشاهدات تغريدة تويتر مجانية
@@ -122,7 +123,8 @@ const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
 const TELEGRAM_PREMIUM_VIEWS_SERVICE_ID = 10908; // 🌟 مشاهدات مميزة بريميوم
 
 const ORDER_TYPE_TO_SERVICE_ID = {
-  
+
+  ttviews2: TIKTOK_VIEWS_NEW_SERVICE_ID,
   ttviews: VIEWS_SERVICE_ID,
   freeviews: TIKTOK_FREE_VIEWS_SERVICE_ID,
   ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
@@ -442,7 +444,7 @@ function servicesKeyboard() {
   return {
     inline_keyboard: [
       // 🎬 تيك توك
-     
+      [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS_NEW" }],
       [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
       [{ text: "🎁 مشاهدات ريلز انستقرام مجانية", callback_data: "NAV:SVC_IG_FREEVIEWS" }],
@@ -552,7 +554,8 @@ function makeReferralLink(u) {
 // =====================
 // 8) SERVICES PRICES
 // =====================
-
+// 🎬 تيك توك (مشاهدات)
+const ttViewsPrices = { 10: 1000, 20: 2000, 30: 3000, 40: 4000, 50: 5000 };
 const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
 const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
 const fbStoryPrices = { 10: 60, 30: 130, 50: 200, 100: 270 };
@@ -896,7 +899,7 @@ inline_keyboard: [
 
     // خدمات
     
-
+    if (action === "SVC_TT_VIEWS_NEW") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewsPrices, "NAV:SERVICES");
     if (action === "SVC_TT_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", "BUY:TTFOLLOW", ttFollowersPrices, "NAV:SERVICES");
 
     if (action === "SVC_TT_FREEVIEWS") {
@@ -1028,7 +1031,7 @@ inline_keyboard: [
     let askText = "";
     let orderType = "";
 
-
+    if (type === "TTVIEWS") { cost = ttViewsPrices[qty] || 0; askText = "🔗 أرسل رابط فيديو تيك توك:"; orderType = "ttviews"; }
     if (type === "TTFOLLOW") { cost = ttFollowersPrices[qty] || 0; askText = "🔗 أرسل رابط حساب تيك توك:"; orderType = "ttfollowers"; }
     if (type === "FREEVIEWS") { cost = 0; askText = "🔗 أرسل رابط:"; orderType = "freeviews"; }
     if (type === "TGFOLLOW") { cost = tgFollowerPrices[qty] || 0; askText = "🔗 أرسل رابط (https://t.me/..):"; orderType = "tgfollowers"; }
