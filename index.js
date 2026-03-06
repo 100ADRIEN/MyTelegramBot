@@ -13,7 +13,6 @@ const { MongoClient } = require("mongodb");
 // =====================
 
 
-
 // ===== MongoDB Connection =====
 // 🔴 حط رابطك هنا (من Atlas > Connect > Drivers)
 // مثال: mongodb+srv://animebot:PASSWORD@cluster0....mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
@@ -812,15 +811,11 @@ bot.on("callback_query", async (q) => {
 const msg =` 
 💎 *أسعار نقاط البوت*
 
-$1 = 12000 نقطة 💎  
-$2 = 24000 نقطة 💎  
-$3 = 36000 نقطة 💎  
-$4 = 48000 نقطة 💎  
-$5 = 60000 نقطة 💎  
-$10 = 120000 نقطة 💎  
-$20 = 240000 نقطة 💎  
-$50 = 600000 نقطة 💎  
-$150 = 1800000 نقطة 💎  
+$5 = 20000 نقطة 💎
+$10 = 33000 نقطة 💎
+$20 = 57000 نقطة 💎
+$50 = 105000 نقطة 💎
+$150 = 200000 نقطة 💎
 
 ━━━━━━━━━━━━━━
 
