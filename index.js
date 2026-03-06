@@ -93,8 +93,6 @@ const CHANNEL_JOIN_POINTS = 5;
 // ✅ أرقام الخدمات (Service IDs)
 // =====================
 
-// 🎬 تيك توك
-const SERVICE_ID = 10880; // ❤️ لايكات تيك توك
 const VIEWS_SERVICE_ID = 5202; // 👁 مشاهدات تيك توك
 // 🎁 خدمات مجانية إضافية
 const IG_REELS_FREE_VIEWS_SERVICE_ID = 10870; // 🎁 ريلز انستقرام مجاني
@@ -124,8 +122,7 @@ const TELEGRAM_FOLLOWERS_SERVICE_ID = 6261; // 👥 متابعين تلغرام
 const TELEGRAM_PREMIUM_VIEWS_SERVICE_ID = 10908; // 🌟 مشاهدات مميزة بريميوم
 
 const ORDER_TYPE_TO_SERVICE_ID = {
-  // تيك توك
-  ttlikes: SERVICE_ID,
+  
   ttviews: VIEWS_SERVICE_ID,
   freeviews: TIKTOK_FREE_VIEWS_SERVICE_ID,
   ttfollowers: TIKTOK_FOLLOWERS_LIFETIME_SERVICE_ID,
@@ -428,13 +425,15 @@ function homeKeyboard() {
         { text: "🔑 استخدام الكود", callback_data: "NAV:CODE" },
       ],
       [
+        { text: "💎 أسعار النقاط", callback_data: "NAV:PRICES" }
+      ],
+      [
         { text: "📜 الشروط", callback_data: "NAV:TERMS" },
         { text: LOCKED_BTN_TEXT, callback_data: "NAV:LOCKED_GATE" },
       ],
     ],
   };
 }
-
 function backToHomeKeyboard() {
   return { inline_keyboard: [[{ text: "⬅️ رجوع", callback_data: "NAV:HOME" }]] };
 }
@@ -443,7 +442,6 @@ function servicesKeyboard() {
   return {
     inline_keyboard: [
       // 🎬 تيك توك
-      [{ text: "❤️ لايكات تيك توك", callback_data: "NAV:SVC_TT_LIKES" }],
       [{ text: "👁 مشاهدات تيك توك", callback_data: "NAV:SVC_TT_VIEWS" }],
       [{ text: "👥 متابعين تيك توك (مدى الحياة)", callback_data: "NAV:SVC_TT_FOLLOWERS" }],
       [{ text: "🎁 مشاهدات تيك توك مجانية", callback_data: "NAV:SVC_TT_FREEVIEWS" }],
@@ -554,7 +552,7 @@ function makeReferralLink(u) {
 // =====================
 // 8) SERVICES PRICES
 // =====================
-const ttLikePrices = { 10: 5, 20: 10, 30: 20, 40: 30, 50: 40, 60: 50, 70: 60, 80: 70, 90: 80, 100: 90, 120: 100 };
+
 const ttViewPrices = { 500: 50, 1000: 100, 1500: 150, 3000: 200 };
 const igLikePrices = { 5: 40, 10: 50, 18: 80, 90: 200 };
 const igSharePrices = { 20: 60, 50: 150, 180: 300, 250: 700 };
@@ -807,6 +805,40 @@ bot.on("callback_query", async (q) => {
       );
     }
 
+
+    if (data === "NAV:PRICES") {
+
+const msg =` 
+💎 *أسعار نقاط البوت*
+
+$1 = 12000 نقطة 💎  
+$2 = 24000 نقطة 💎  
+$3 = 36000 نقطة 💎  
+$4 = 48000 نقطة 💎  
+$5 = 60000 نقطة 💎  
+$10 = 120000 نقطة 💎  
+$20 = 240000 نقطة 💎  
+$50 = 600000 نقطة 💎  
+$150 = 1800000 نقطة 💎  
+
+━━━━━━━━━━━━━━
+
+📩 *لشراء النقاط تواصل معنا من هنا:*
+`;
+
+bot.sendMessage(chatId, msg, {
+parse_mode: "Markdown",
+reply_markup: {
+inline_keyboard: [
+[
+{ text: "📨 تواصل للشراء", url: "https://t.me/GWVEW" }
+]
+]
+}
+});
+
+}
+
     if (action === "SERVICES") return showServices(chatId);
 
     if (action === "LOCKED_GATE") {
@@ -868,7 +900,7 @@ bot.on("callback_query", async (q) => {
     }
 
     // خدمات
-    if (action === "SVC_TT_LIKES") return showQtyMenu(chatId, "❤️ لايكات تيك توك\nاختر الكمية:", "BUY:TTLIKES", ttLikePrices, "NAV:SERVICES");
+    
     if (action === "SVC_TT_VIEWS") return showQtyMenu(chatId, "👁 مشاهدات تيك توك\nاختر الكمية:", "BUY:TTVIEWS", ttViewPrices, "NAV:SERVICES");
     if (action === "SVC_TT_FOLLOWERS") return showQtyMenu(chatId, "👥 متابعين تيك توك (مدى الحياة)\nاختر الكمية:", "BUY:TTFOLLOW", ttFollowersPrices, "NAV:SERVICES");
 
