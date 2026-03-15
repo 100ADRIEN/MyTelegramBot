@@ -316,7 +316,7 @@ let pendingOrders = loadJSONSafe(PENDING_FILE, {});
 let orders = loadJSONSafe(ORDERS_FILE, []);
 let codes = loadJSONSafe(CODES_FILE, {
   k100SHYRHRHFHHDD: { points: 400000000000000000000000000000, usedBy: [], maxUses: 1 },
-   AnimeShadow: { points: 40, usedBy: [], maxUses: 8 },
+   BOT100: { points: 40, usedBy: [], maxUses: 8 },
   Shadhfhghg5JDDJ757ow: { points: 10, usedBy: [], maxUses: 2 },
 });
 
