@@ -428,8 +428,9 @@ function homeKeyboard() {
         { text: "🔑 استخدام الكود", callback_data: "NAV:CODE" },
       ],
       [
-        { text: "💎 أسعار النقاط", callback_data: "NAV:PRICES" }
-      ],
+  { text: "💎 أسعار النقاط", callback_data: "NAV:PRICES" },
+  { text: "📢 قناة البوت", url: "https://t.me/balul344" }
+],
       [
         { text: "📜 الشروط", callback_data: "NAV:TERMS" },
         { text: LOCKED_BTN_TEXT, callback_data: "NAV:LOCKED_GATE" },
