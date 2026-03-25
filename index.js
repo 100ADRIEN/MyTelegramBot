@@ -13,6 +13,7 @@ const { MongoClient } = require("mongodb");
 // =====================
 
 
+
 // ===== MongoDB Connection =====
 // 🔴 حط رابطك هنا (من Atlas > Connect > Drivers)
 // مثال: mongodb+srv://animebot:PASSWORD@cluster0....mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
